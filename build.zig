@@ -1,8 +1,18 @@
 const std = @import("std");
 
+const extern_pkg_path: []const u8 = "packages";
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    // arg
+    const arg_pkg_name: []const u8 = "arg_parse";
+    const arg_pkg = b.createModule(.{
+        .root_source_file = b.path(extern_pkg_path ++ "/arg_parse/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
     const libmml = b.addLibrary(.{
         .name = "mml",
@@ -26,6 +36,7 @@ pub fn build(b: *std.Build) void {
     });
 
     main.linkLibrary(libmml);
+    main.root_module.addImport(arg_pkg_name, arg_pkg);
     b.installArtifact(main);
 
     const run_main = b.addRunArtifact(main);

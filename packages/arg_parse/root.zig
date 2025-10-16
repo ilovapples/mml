@@ -1,6 +1,6 @@
 const std = @import("std");
 
-var usage_column2: usize = 30;
+pub var usage_column2: usize = 30;
 
 pub const ArgParser = struct {
     alloc: std.mem.Allocator,
