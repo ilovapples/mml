@@ -8,8 +8,8 @@ const token = @import("token.zig");
 const config_mod = @import("config.zig");
 const Expr = exprs.Expr;
 
-const math_lib = @import("lib/math.zig");
-const stdmml_lib = @import("lib/stdmml.zig");
+const math_lib = @import("mml-core/math.zig");
+const stdmml_lib = @import("mml-core/stdmml.zig");
 
 pub const MultiArgFunc = *const fn(state: *Self, args: []*Expr) EvalError!Expr;
 pub const MultiArgFuncEntry = struct {
@@ -194,7 +194,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             .OpNegate => { // negation operation
                 return switch (left) {
                     .boolean, .real_number => Expr.init(-(try left.getReal())),
-                    .complex_number => Expr.init((try left.getComplex()).neg()),
+                    .complex_number => Expr.init(left.complex_number.neg()),
                     .vector => self.applyOp(lo, Expr.init(@as(exprs.real_number_type, -1.0)), .OpMul),
                     else => blk: {
                         warnBadOperation(op, left, null);

@@ -80,7 +80,7 @@ fn builtin_as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
         return Expr.init(@as(i64, @intFromFloat(@trunc(try e.getReal()))));
     } else if (std.mem.eql(u8, s.string, "real") and (e.isNumber() or e == .integer)) { // -> real
         return switch (e) {
-            .boolean, .real_number => e,
+            .boolean, .real_number => Expr.init(try e.getReal()),
             .complex_number => if (Evaluator.dropComplexIfZeroImag(e.complex_number)) |c| Expr.init(c)
                 else Expr{.invalid = {}},
             .integer => Expr.init(@as(exprs.real_number_type, @floatFromInt(e.integer))),
@@ -95,5 +95,6 @@ fn builtin_as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
         e.printValue(new_config) catch return Expr{.string = buffer};
         return Expr{.string = buffer[0..writer.end]};
     }
+
     return Evaluator.EvalError.BadOperation;
 }

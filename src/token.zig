@@ -182,7 +182,7 @@ pub const Token = struct {
 
                 break :blk Self{.string = string[0..index], .type = .Ident};
             },
-            // todo V
+
             '@' => blk: {
                 if (string[1] != '_' and !std.ascii.isAlphabetic(string[1])) {
                     break :blk Self{.string = string, .type = .Invalid };

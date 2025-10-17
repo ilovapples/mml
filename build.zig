@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // PACKAGES
     // arg
     const arg_pkg_name: []const u8 = "arg_parse";
     const arg_pkg = b.createModule(.{
@@ -14,6 +15,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // LIBMML LIBRARY (currently empty because it has no C exported functions)
     const libmml = b.addLibrary(.{
         .name = "mml",
         .linkage = .static,
@@ -26,6 +28,7 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(libmml);
 
+    // MML EXECUTABLE
     const main = b.addExecutable(.{
         .name = "mml_main",
         .root_module = b.createModule(.{
@@ -37,6 +40,7 @@ pub fn build(b: *std.Build) void {
 
     main.linkLibrary(libmml);
     main.root_module.addImport(arg_pkg_name, arg_pkg);
+    main.root_module.addImport("mml", libmml.root_module);
     b.installArtifact(main);
 
     const run_main = b.addRunArtifact(main);

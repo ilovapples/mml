@@ -1,7 +1,6 @@
 const std = @import("std");
-const mml = @import("root.zig");
-const arg_parse = @import("arg_parse");
-const ArgParser = arg_parse.ArgParser;
+const mml = @import("mml");
+const ArgParser = @import("arg_parse").ArgParser;
 
 const Config = mml.config.Config;
 const Expr = mml.expr.Expr;
@@ -14,24 +13,13 @@ pub fn main() !void {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    // allocators
+    // arena & allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
     const gpa_alloc = gpa.allocator();
 
     var arena = std.heap.ArenaAllocator.init(gpa_alloc);
     defer arena.deinit();
     const allocator = arena.allocator();
-
-    // config
-    var my_config: Config = .{
-        .writer = stdout,
-    };
-
-    // evaluator
-    var eval = try Evaluator.init(allocator, &my_config);
-    defer eval.deinit();
-
-    my_config.evaluator = &eval;
 
     // arguments
     const args = try std.process.argsAlloc(allocator);
@@ -41,12 +29,32 @@ pub fn main() !void {
     defer arg_parser.deinit();
 
     const expr_str = arg_parser.option([]const u8, "expr", "the expression to evaluate") orelse "(3+9^2) * 15";
+    
+    // config
+    var my_config: Config = .{
+        .writer = stdout,
+    };
+
+    my_config.bools_print_as_nums = arg_parser.option(bool,
+        "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
+    my_config.decimal_precision = arg_parser.option(u32,
+        "precision", "precision to use when displaying decimals") orelse 6;
+    my_config.quote_strings = arg_parser.option(bool,
+        "quote-strings", "if set, strings print surrounded by double quotes") orelse false;
+
     const print_usage = arg_parser.option(bool, "help", "display usage information") orelse false;
     if (print_usage) {
         arg_parser.printUsage(stdout);
         try stdout.flush();
         std.process.exit(1);
     }
+
+    // evaluator
+    var eval = try Evaluator.init(allocator, &my_config);
+    defer eval.deinit();
+
+    my_config.evaluator = &eval;
+
 
     if (!arg_parser.finalize()) std.process.exit(1);
 
