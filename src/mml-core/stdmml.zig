@@ -21,7 +21,7 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
 }
 
 fn dbg(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
-    try args[0].print(state.config.?.*);
+    args[0].print(state.config.?.*);
     return Expr.init({});
 }
 fn dbg_type(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
@@ -31,22 +31,33 @@ fn dbg_type(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
 fn dbg_ident(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     const e = state.findIdent(args[0].identifier);
     if (e == null) return Expr{.string = "unknown"};
-    try e.?.print(state.config.?.*);
+    e.?.print(state.config.?.*);
 
     return Expr.init({});
 }
 fn print(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+    const saved_quote_strings = if (state.config) |conf| conf.quote_strings else false;
+    if (state.config) |conf| conf.quote_strings = false;
+
     for (args, 0..) |e, i| {
-        try (try state.eval(e)).printValue(state.config.?.*);
-        if (i < args.len - 1) try state.config.?.writer.?.writeByte(' ');
+        const v = try state.eval(e);
+        try v.printValue(state.config.?.*);
+        if (i < args.len - 1) state.config.?.writer.writeByte(' ') catch {};
     }
+
+    if (state.config) |conf| conf.quote_strings = saved_quote_strings;
     return Expr.init({});
 }
 fn println(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+    const saved_quote_strings = if (state.config) |conf| conf.quote_strings else false;
+    if (state.config) |conf| conf.quote_strings = false;
+
     for (args) |e| {
         try (try state.eval(e)).printValue(state.config.?.*);
-        try state.config.?.writer.?.writeByte('\n');
+        state.config.?.writer.writeByte('\n') catch {};
     }
+
+    if (state.config) |conf| conf.quote_strings = saved_quote_strings;
     return Expr.init({});
 }
 fn sort(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
@@ -73,6 +84,7 @@ fn exprLessThan(c: struct { *Evaluator }, a: *Expr, b: *Expr) bool {
 fn builtin_as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     const s = args[0].*; // string
     const e = try state.eval(args[1]);
+
     if (std.mem.eql(u8, s.string, "complex") and e.isNumber()) { // -> complex
         if (e.isComplex()) return e;
         if (e.isReal()) return Expr.init(Complex(exprs.real_number_type).init(try e.getReal(), 0.0));

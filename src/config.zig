@@ -10,11 +10,9 @@ pub const Config = struct {
 
     evaluator: ?*Evaluator = null,
 
-    writer: ?*std.Io.Writer = null,
+    writer: *std.Io.Writer,
 
-    decimal_precision: u32 = 6,
+    decimal_precision: u32 = 6, // unused
     bools_print_as_nums: bool = false,
     quote_strings: bool = false,
 };
-
-pub const default_config: Config = .{};

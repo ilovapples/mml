@@ -2,7 +2,7 @@ const std = @import("std");
 const Complex = std.math.Complex;
 
 const token = @import("token.zig");
-const config = @import("config.zig");
+const config_mod = @import("config.zig");
 const Evaluator = @import("Evaluator.zig");
 
 pub const Oper = struct {
@@ -39,107 +39,102 @@ pub const Expr = union(enum) {
             []*Expr => .{ .vector = val },
             i64 => .{ .integer = val },
             void => .{ .nothing = {} },
-            else => blk: {
-                std.debug.print("bruh what the heck is this type: {t}\n", .{val});
-                break :blk .{ .invalid = {} };
-            },
+            else => @compileError("can't construct an Expr from a value of this type: " ++ @typeName(@TypeOf(val))),
         };
     }
 
-    pub const PrintExprError = error{ConfigHasNoWriter} || std.Io.Writer.Error;
-    pub const PrintExprValueError = PrintExprError || Evaluator.EvalError;
     fn printRecurse(
         self: ?*const Self,
-        config_: config.Config,
+        config: config_mod.Config,
         indent: u32,
-    ) PrintExprError!void {
-        const writer = config_.writer orelse return PrintExprError.ConfigHasNoWriter;
-        try printIndent(writer, indent);
+    ) void {
+        const w = config.writer;
+        printIndent(w, indent);
         if (self == null) {
-            try writer.writeAll("(null)");
-            try writer.flush();
+            w.writeAll("(null)") catch return;
+            w.flush() catch return;
             return;
         }
         const expr = self.?;
         switch (expr.*) {
             .operation => {
-                try writer.print("Operation(.{t},\n", .{expr.operation.op});
+                w.print("Operation(.{t},\n", .{expr.operation.op}) catch return;
 
-                try Expr.printRecurse(expr.operation.left, config_, indent+4);
+                Expr.printRecurse(expr.operation.left, config, indent+4);
                 if (expr.operation.right) |right| {
-                    try writer.writeAll(",\n");
-                    try Expr.printRecurse(right, config_, indent+4);
+                    w.writeAll(",\n") catch return;
+                    Expr.printRecurse(right, config, indent+4);
                 }
 
-                try writer.writeAll(",\n");
-                try printIndent(writer, indent);
-                try writer.writeByte(')');
+                w.writeAll(",\n") catch return;
+                printIndent(w, indent);
+                w.writeByte(')') catch return;
             },
-            .real_number => try writer.print("Real({f})", .{expr}),
-            .complex_number => try writer.print("Complex({f})", .{expr}),
-            .boolean => try writer.print("Bool({f})", .{expr}),
-            .identifier => try writer.print("Identifier('{s}'", .{expr.identifier}),
-            .builtin_ident => try writer.print("BuiltinIdent('@{s}'", .{expr.builtin_ident}),
-            .string => try writer.print("String('{s}'", .{expr.string}),
+            .real_number => w.print("Real({f})", .{expr}) catch return,
+            .complex_number => w.print("Complex({f})", .{expr}) catch return,
+            .boolean => w.print("Bool({f})", .{expr}) catch return,
+            .identifier => w.print("Identifier('{s}'", .{expr.identifier}) catch return,
+            .builtin_ident => w.print("BuiltinIdent('@{s}'", .{expr.builtin_ident}) catch return,
+            .string => w.print("String('{s}'", .{expr.string}) catch return,
             .vector => {
-                try writer.print("Vector(n={},\n", .{expr.vector.len});
+                w.print("Vector(n={},\n", .{expr.vector.len}) catch return;
                 for (expr.vector) |e| {
-                    try Expr.printRecurse(e, config_, indent+2);
-                    try writer.writeAll(",\n");
+                    Expr.printRecurse(e, config, indent+2);
+                    w.writeAll(",\n") catch return;
                 }
-                try printIndent(writer, indent);
-                try writer.writeByte(')');
+                printIndent(w, indent);
+                w.writeByte(')') catch return;
             },
-            .integer => try writer.print("Integer({f})", .{expr}),
-            else => try writer.writeAll("(null)"),
+            .integer => w.print("Integer({f})", .{expr}) catch return,
+            else => w.writeAll("(null)") catch return,
         }
 
-        try writer.flush();
+        w.flush() catch return;
     }
-    pub fn print(self: *const Self, config_: config.Config) PrintExprError!void {
-        try Expr.printRecurse(self, config_, 0);
+    pub fn print(self: *const Self, config: config_mod.Config) void {
+        Expr.printRecurse(self, config, 0);
     }
 
-    pub fn printValue(self: Self, config_: config.Config) PrintExprValueError!void {
-        const w = config_.writer orelse return error.ConfigHasNoWriter;
+    pub fn printValue(self: Self, config: config_mod.Config) Evaluator.EvalError!void {
+        const w = config.writer;
         switch (self) {
             .nothing => {},
-            .real_number => try w.print("{d}", .{self.real_number}),
-            .complex_number => try w.print("{d}{s}{d}i", .{
+            .real_number => w.print("{d}", .{self.real_number}) catch return,
+            .complex_number => w.print("{d}{s}{d}i", .{
                 self.complex_number.re,
                 if (self.complex_number.im < 0) "-" else "+",
                 @abs(self.complex_number.im),
-            }),
+            }) catch return,
             .boolean => {
-                if (config_.bools_print_as_nums) {
-                    try w.print("{d}", .{@as(real_number_type, @floatFromInt(@intFromBool(self.boolean)))});
+                if (config.bools_print_as_nums) {
+                    w.print("{d}", .{@as(real_number_type, @floatFromInt(@intFromBool(self.boolean)))}) catch return;
                 } else {
-                    try w.writeAll(if (self.boolean) "true" else "false");
+                    w.writeAll(if (self.boolean) "true" else "false") catch return;
                 }
             },
-            .string => if (config_.quote_strings)
-                try w.print("\"{s}\"", .{self.string})
+            .string => if (config.quote_strings)
+                w.print("\"{s}\"", .{self.string}) catch return
             else
-                try w.print("{s}", .{self.string}),
-            .identifier => try w.print("{s}", .{self.identifier}),
+                w.print("{s}", .{self.string}) catch return,
+            .identifier => w.print("{s}", .{self.identifier}) catch return,
             .vector => {
-                if (config_.evaluator == null) {
+                if (config.evaluator == null) {
                     std.log.err("called `printValue` without saving an evaluator in the config.\n", .{});
                     return;
                 }
-                var new_config = config_;
+                var new_config = config;
                 new_config.quote_strings = true;
 
-                try w.writeByte('[');
+                w.writeByte('[') catch return;
                 for (self.vector, 0..) |e, i| {
-                    const val = try config_.evaluator.?.eval(e);
+                    const val = try config.evaluator.?.eval(e);
                     try Expr.printValue(val, new_config);
-                    if (i < self.vector.len - 1) try w.writeAll(", ");
+                    if (i < self.vector.len - 1) w.writeAll(", ") catch return;
                 }
-                try w.writeByte(']');
+                w.writeByte(']') catch return;
             },
-            .integer => try w.print("{}", .{self.integer}),
-            else => try w.writeAll("(null)"),
+            .integer => w.print("{}", .{self.integer}) catch return,
+            else => w.writeAll("(null)") catch return,
         }
     }
 
@@ -149,7 +144,7 @@ pub const Expr = union(enum) {
         w: *std.Io.Writer,
     ) !void {
         if (self == .vector) return;
-        const temp_config: config.Config = .{ .writer = w };
+        const temp_config: config_mod.Config = .{ .writer = w };
         self.printValue(temp_config) catch return;
     }
 
@@ -194,17 +189,12 @@ pub const Expr = union(enum) {
     }
 };
 
-fn printIndent(w: *std.Io.Writer, indent: u32) !void {
-    try w.print("{s: <[1]}", .{"", indent});
+fn printIndent(w: *std.Io.Writer, indent: u32) void {
+    w.print("{s: <[1]}", .{"", indent}) catch return;
 }
 
-test "test test" {
-    const k: Expr = .init(@as(real_number_type, 9.5));
+test "expr.getReal" {
+    const k = Expr.init(@as(real_number_type, 9.5));
     try std.testing.expect(try k.getReal() == 9.5);
     try std.testing.expect(try Expr.init(false).getReal() == 0.0);
-
-    //try k.print(.{});
-
-    //try config.default_config.writer.?.writeByte('\n');
-    //try config.default_config.writer.?.flush();
 }

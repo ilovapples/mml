@@ -76,7 +76,7 @@ fn atan2(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     const y = try state.eval(args[0]);
     const x = try state.eval(args[1]);
     if (y != .real_number or x != .real_number) {
-        try Evaluator.warnBadFuncArgument(
+        Evaluator.warnBadFuncArgument(
             "atan2",
             if (y != .real_number) 0 else 1,
             &correct_arg_types,
@@ -91,7 +91,7 @@ fn logb(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     const b = try state.eval(args[1]);
     const correct_arg_types = [_]Expr.Kinds{.real_number, .complex_number, .boolean};
     if (!a.isNumber() or !b.isNumber()) {
-        try Evaluator.warnBadFuncArgument(
+        Evaluator.warnBadFuncArgument(
             "logb",
             if (!a.isNumber()) 0 else 1,
             &correct_arg_types,

@@ -34,7 +34,9 @@ pub const ArgParser = struct {
                         try pa.fields.put(up_to, cur[delim+1..]);
                     }
                 } else { // --field value
-                    if (i >= args.len - 1 or std.mem.eql(u8, args[i+1][0..2], "--")) { // '--field' means a true boolean
+                    if (i >= args.len - 1
+                        or (args[i+1].len > 2
+                            and std.mem.eql(u8, args[i+1][0..2], "--"))) { // '--field' means a true boolean
                         try pa.fields.put(cur[2..], args[i][0..0]);
                     } else { // `--field value`
                         try pa.fields.put(cur[2..], args[i+1]);

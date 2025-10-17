@@ -78,7 +78,6 @@ pub const EvalError = error{
     InvalidExpression,
 }
 || exprs.Expr.GetComplexError
-|| exprs.Expr.PrintExprError
 || Allocator.Error;
 fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
     switch (e.*) {
@@ -422,14 +421,14 @@ pub fn warnBadFuncArgument(
     arg_index: usize,
     expected_types: []const Expr.Kinds,
     got_type_str: []const u8,
-) !void {
+) void {
     var buffer: [1024]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    try writer.print("in call to function '{s}': argument {} expects one of these types: ", .{func_name, arg_index+1});
+    writer.print("in call to function '{s}': argument {} expects one of these types: ", .{func_name, arg_index+1}) catch return;
     for (expected_types) |t| {
-        try writer.print("'{t}', ", .{t});
+        writer.print("'{t}', ", .{t}) catch return;
     }
-    try writer.print("\ngot '{s}'", .{got_type_str});
+    writer.print("\ngot '{s}'", .{got_type_str}) catch return;
     std.log.warn("{s}", .{buffer[0..writer.end]});
 }
 pub fn dropComplexIfZeroImag(z: Complex(exprs.real_number_type)) ?exprs.real_number_type {

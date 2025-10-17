@@ -15,6 +15,7 @@ pub fn main() !void {
 
     // arena & allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    defer _ = gpa.deinit();
     const gpa_alloc = gpa.allocator();
 
     var arena = std.heap.ArenaAllocator.init(gpa_alloc);
@@ -38,7 +39,7 @@ pub fn main() !void {
     my_config.bools_print_as_nums = arg_parser.option(bool,
         "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
     my_config.decimal_precision = arg_parser.option(u32,
-        "precision", "precision to use when displaying decimals") orelse 6;
+        "precision", "(WARNING: unused) precision to use when displaying decimals") orelse 6;
     my_config.quote_strings = arg_parser.option(bool,
         "quote-strings", "if set, strings print surrounded by double quotes") orelse false;
 
@@ -55,11 +56,18 @@ pub fn main() !void {
 
     my_config.evaluator = &eval;
 
-
-    if (!arg_parser.finalize()) std.process.exit(1);
+    if (!arg_parser.finalize()) {
+        try stdout.writeByte('\n');
+        arg_parser.printUsage(stdout);
+        try stdout.flush();
+        std.process.exit(1);
+    }
 
     // parsing & evaluating
-    const exprs = try parser.parseStatements(expr_str, allocator);
+    const exprs = parser.parseStatements(expr_str, allocator) catch {
+        std.log.err("failed to parse expressions from source: '{s}'\n", .{expr_str});
+        return;
+    };
 
     var val: Expr = Expr{.invalid = {}};
     for (exprs) |e| {

@@ -44,6 +44,7 @@ pub const ParserState = struct {
     pub fn parseExprRecurse(self: *Self, max_preced: u8) !*Expr {
         var tok = self.nextToken();
         var left = try self.allocator.?.create(Expr);
+        errdefer self.allocator.?.destroy(left);
 
         if (tok.type == .OpSub or tok.type == .OpAdd or tok.isUnaryOp()) {
             const new_token_type = switch (tok.type) {
@@ -114,6 +115,7 @@ pub const ParserState = struct {
             }
         } else if (tok.type == .OpenBracket) { // vector literal
             var temp_arrlist = try std.ArrayList(*Expr).initCapacity(self.allocator.?, 2);
+            errdefer temp_arrlist.deinit(self.allocator.?);
             if (self.peekToken().type == .CloseBracket) {
                 left.* = @unionInit(Expr, "vector", &[_]*Expr{});
                 tok = self.nextToken();
@@ -128,8 +130,6 @@ pub const ParserState = struct {
                     std.log.err("unexpected token .{t} ({s}) found after element in vector "
                              ++ "literal (expected .CloseBracket (']') or .Comma (','))\n", .{
                         tok.type, try tok.type.stringify()});
-                    temp_arrlist.deinit(self.allocator.?);
-                    self.allocator.?.destroy(left);
 
                     return ParseError.UnterminatedVectorLiteral;
                 }
@@ -174,7 +174,6 @@ pub const ParserState = struct {
         } else if (tok.type == .BuiltinIdent) {
             left.* = @unionInit(Expr, "builtin_ident", tok.string[1..tok.string.len]);
         } else {
-            self.allocator.?.destroy(left);
             std.log.err("null expression. found token .{t} ({s})", .{tok.type, try tok.type.stringify()});
             return ParseError.NullExpr;
         }
@@ -205,7 +204,6 @@ pub const ParserState = struct {
                 std.log.err("expected expression after operator .{t} ({s})\n", .{
                     op_tok.type, try op_tok.type.stringify()
                 });
-                self.allocator.?.destroy(left);
                 return ParseError.ExpectedExpr;
             };
 
@@ -233,6 +231,7 @@ pub fn parseExpr(str: []const u8, allocator: Allocator) !*Expr {
 
 pub fn parseStatements(str: []const u8, allocator: Allocator) ![]*Expr {
     var temp = try std.ArrayList(*Expr).initCapacity(allocator, 1);
+    errdefer temp.deinit(allocator);
 
     var state = ParserState.init(str);
     state.allocator = allocator;
