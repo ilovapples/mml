@@ -79,7 +79,7 @@ pub const Expr = union(enum) {
             .vector => {
                 w.print("Vector(n={},\n", .{expr.vector.len}) catch return;
                 for (expr.vector) |e| {
-                    Expr.printRecurse(e, config, indent+2);
+                    Expr.printRecurse(e, config, indent+4);
                     w.writeAll(",\n") catch return;
                 }
                 printIndent(w, indent);
