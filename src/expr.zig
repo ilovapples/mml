@@ -11,14 +11,12 @@ pub const Oper = struct {
     op: token.TokenType,
 };
 
-pub const real_number_type = f64;
-
 pub const Expr = union(enum) {
     invalid: void,
     nothing: void,
     operation: Oper,
-    real_number: real_number_type,
-    complex_number: Complex(real_number_type),
+    real_number: f64,
+    complex_number: Complex(f64),
     boolean: bool,
     builtin_ident: []const u8,
     string: []const u8,
@@ -32,8 +30,8 @@ pub const Expr = union(enum) {
 
     pub fn init(val: anytype) Self {
         return switch (@TypeOf(val)) {
-            real_number_type, comptime_float => .{ .real_number = val },
-            Complex(real_number_type) => .{ .complex_number = val },
+            f64, comptime_float => .{ .real_number = val },
+            Complex(f64) => .{ .complex_number = val },
             bool => .{ .boolean = val },
             []const u8 => .{ .identifier = val },
             []*Expr => .{ .vector = val },
@@ -107,7 +105,7 @@ pub const Expr = union(enum) {
             }) catch return,
             .boolean => {
                 if (config.bools_print_as_nums) {
-                    w.print("{d}", .{@as(real_number_type, @floatFromInt(@intFromBool(self.boolean)))}) catch return;
+                    w.print("{d}", .{@as(f64, @floatFromInt(@intFromBool(self.boolean)))}) catch return;
                 } else {
                     w.writeAll(if (self.boolean) "true" else "false") catch return;
                 }
@@ -148,17 +146,17 @@ pub const Expr = union(enum) {
         self.printValue(temp_config) catch return;
     }
 
-    pub fn getReal(self: Self) real_number_type {
+    pub fn getReal(self: Self) f64 {
         return switch (self) {
             .boolean => @floatFromInt(@intFromBool(self.boolean)),
             .real_number => self.real_number,
             else => unreachable,
         };
     }
-    pub fn getComplex(self: Self) Complex(real_number_type) {
+    pub fn getComplex(self: Self) Complex(f64) {
         return switch (self) {
             .complex_number => self.complex_number,
-            .boolean, .real_number => Complex(real_number_type).init(self.getReal(), 0),
+            .boolean, .real_number => Complex(f64).init(self.getReal(), 0),
             else => unreachable,
         };
     }
@@ -191,7 +189,7 @@ fn printIndent(w: *std.Io.Writer, indent: u32) void {
 }
 
 test "expr.getReal" {
-    const k = Expr.init(@as(real_number_type, 9.5));
+    const k = Expr.init(@as(f64, 9.5));
     try std.testing.expect(try k.getReal() == 9.5);
     try std.testing.expect(try Expr.init(false).getReal() == 0.0);
 }

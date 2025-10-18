@@ -1,14 +1,21 @@
 const std = @import("std");
-const mml = @import("mml");
+const Io = std.Io;
+const IoLimit = Io.Limit;
+const linux = std.os.linux;
+
 const ArgParser = @import("arg_parse").ArgParser;
 
+const mml = @import("mml");
 const Config = mml.config.Config;
 const Expr = mml.expr.Expr;
 const parser = mml.parser;
 const Evaluator = mml.Evaluator;
 
 pub fn main() !void {
-    // stdout writer
+    // I/O setup
+    //var stdin_buffer: [512]u8 = undefined;
+    //var stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
+
     var stdout_buffer: [512]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
@@ -36,6 +43,11 @@ pub fn main() !void {
         .writer = stdout,
     };
 
+    if (arg_parser.option(bool, "repl", "(not fully implemented) use an interactive prompt (REPL)") orelse false) {
+        @panic("REPL is not fully implemented, so you can't use it yet");
+        //try runPrompt(&stdin_reader, stdout);
+        //return;
+    }
     my_config.bools_print_as_nums = arg_parser.option(bool,
         "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
     my_config.decimal_precision = arg_parser.option(u32,
@@ -76,4 +88,35 @@ pub fn main() !void {
     try val.printValue(my_config);
 
     try stdout.flush();
+}
+
+fn runPrompt(stdin_reader: *std.fs.File.Reader, stdout: *Io.Writer) !void {
+    const prompt_str = ">> ";
+
+    try stdout.writeAll(
+        "MML Interactive Prompt 0.1.0 (zig ver.)\n"
+     ++ "Type 'exit'+Enter or ctrl+d to quit the prompt\n");
+
+    try stdout.writeAll(prompt_str);
+    try stdout.flush();
+
+    var line_buffer: [512]u8 = undefined;
+    const line_len = try readLine(stdin_reader, &line_buffer);
+ 
+    try stdout.print("buf: '{s}'\n", .{line_buffer[0..line_len]});
+
+    try stdout.flush();
+}
+
+fn readLine(reader: *std.fs.File.Reader, out: []u8) !usize {
+    var w = Io.Writer.fixed(out[0..]);
+    const r = &reader.interface;
+    linux.tcgetattr(reader.file.handle, );
+    return r.streamDelimiterLimit(&w, '\n', IoLimit.limited(out.len));
+}
+
+var saved_termios: ?linux.termios = null;
+fn setTerminalRawMode(file: *const std.fs.File) void {
+    linux.tcgetattr(file.handle, &(saved_termios.?));
+    var new_termios = saved_termios.?;
 }

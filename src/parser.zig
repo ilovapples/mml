@@ -40,8 +40,12 @@ pub const ParserState = struct {
         return ret_tok;
     }
 
-    pub const ParseError = error{ExpectedExpr, NullExpr, UnterminatedVectorLiteral};
-    pub fn parseExprRecurse(self: *Self, max_preced: u8) !*Expr {
+    pub const ParseError = error{
+        ExpectedExpr,
+        NullExpr,
+        UnterminatedVectorLiteral,
+    } || Allocator.Error;
+    pub fn parseExprRecurse(self: *Self, max_preced: u8) ParseError!*Expr {
         var tok = self.nextToken();
         var left = try self.allocator.?.create(Expr);
         errdefer self.allocator.?.destroy(left);
@@ -129,7 +133,7 @@ pub const ParserState = struct {
                     // maybe I should use zig error unions for this kind of thing...
                     std.log.err("unexpected token .{t} ({s}) found after element in vector "
                              ++ "literal (expected .CloseBracket (']') or .Comma (','))\n", .{
-                        tok.type, try tok.type.stringify()});
+                        tok.type, tok.type.stringify().?});
 
                     return ParseError.UnterminatedVectorLiteral;
                 }
@@ -138,7 +142,8 @@ pub const ParserState = struct {
             left.* = @unionInit(Expr, "vector", try temp_arrlist.toOwnedSlice(self.allocator.?));
         } else if (tok.type == .Pipe) {
             if (self.peekToken().type == .Pipe) {
-                std.log.err("expected expression in pipe block ({s})\n", .{try token.TokenType.Pipe.stringify()});
+                std.log.err("expected expression in pipe block ({s})\n", .{
+                    token.TokenType.Pipe.stringify().?});
                 return ParseError.ExpectedExpr;
             }
 
@@ -162,11 +167,26 @@ pub const ParserState = struct {
 
             left = opnode;
         } else if (tok.type == .Number) {
-            left.* = @unionInit(Expr, "real_number", std.math.nan(expr.real_number_type));
-            if (self.looking_for_int) {
-                left.real_number = @floatFromInt(try std.fmt.parseInt(i64, tok.string, 10));
+			if (self.looking_for_int) {
+				left.* = @unionInit(Expr, "integer", std.fmt.parseInt(i64, tok.string, 10) catch |e| blk: switch (e) {
+                    std.fmt.ParseIntError.Overflow => {
+                        std.log.err("integer read as '{s}' has a magnitude "
+                                 ++ "larger than about 9.2 quintillion (2^63). "
+								 ++ "assuming infinity.\n", .{tok.string});
+						break :blk std.math.maxInt(i64);
+                    },
+                    std.fmt.ParseIntError.InvalidCharacter => {
+						std.log.err("failed to read '{s}' as an integer. "
+								 ++ "assuming 0.\n", .{tok.string});
+						break :blk 0;
+					},
+				});
             } else {
-                left.real_number = try std.fmt.parseFloat(expr.real_number_type, tok.string);
+                left.* = @unionInit(Expr, "real_number", std.fmt.parseFloat(f64, tok.string) catch blk: {
+					std.log.err("failed to read '{s}' as a real number. "
+						     ++ "assuming NaN (not a number).\n", .{tok.string});
+					break :blk std.math.nan(f64);
+				});
             }
             self.looking_for_int = false;
         } else if (tok.type == .String) {
@@ -174,7 +194,10 @@ pub const ParserState = struct {
         } else if (tok.type == .BuiltinIdent) {
             left.* = @unionInit(Expr, "builtin_ident", tok.string[1..tok.string.len]);
         } else {
-            std.log.err("null expression. found token .{t} ({s})", .{tok.type, try tok.type.stringify()});
+            std.log.err("null expression. found token .{t} ({s})", .{
+				tok.type,
+				tok.type.stringify() orelse "you shouldn't ever see this text; please post an issue",
+			});
             return ParseError.NullExpr;
         }
 
@@ -202,7 +225,8 @@ pub const ParserState = struct {
 
             const right = self.parseExprRecurse(if (op_tok.isRightAssocOp()) preced else preced - 1) catch {
                 std.log.err("expected expression after operator .{t} ({s})\n", .{
-                    op_tok.type, try op_tok.type.stringify()
+                    op_tok.type,
+					op_tok.type.stringify() orelse "you shouldn't ever see this text; please post an issue",
                 });
                 return ParseError.ExpectedExpr;
             };

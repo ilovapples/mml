@@ -84,7 +84,7 @@ fn builtin_as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
 
     if (std.mem.eql(u8, s.string, "complex") and e.isNumber()) { // -> complex
         if (e.isComplex()) return e;
-        if (e.isReal()) return Expr.init(Complex(exprs.real_number_type).init(e.getReal(), 0.0));
+        if (e.isReal()) return Expr.init(Complex(f64).init(e.getReal(), 0.0));
     } else if (std.mem.eql(u8, s.string, "integer") and e.isReal()) { // -> integer
         return Expr.init(@as(i64, @intFromFloat(@trunc(e.getReal()))));
     } else if (std.mem.eql(u8, s.string, "real") and (e.isNumber() or e == .integer)) { // -> real
@@ -92,7 +92,7 @@ fn builtin_as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
             .boolean, .real_number => Expr.init(e.getReal()),
             .complex_number => if (Evaluator.dropComplexIfZeroImag(e.complex_number)) |c| Expr.init(c)
                 else Expr{.invalid = {}},
-            .integer => Expr.init(@as(exprs.real_number_type, @floatFromInt(e.integer))),
+            .integer => Expr.init(@as(f64, @floatFromInt(e.integer))),
             else => Expr{.invalid = {}},
         };
     } else if (std.mem.eql(u8, s.string, "string")) { // -> string
