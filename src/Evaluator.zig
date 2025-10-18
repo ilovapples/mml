@@ -77,7 +77,6 @@ pub const EvalError = error{
     BadOperation,
     InvalidExpression,
 }
-|| exprs.Expr.GetComplexError
 || Allocator.Error;
 fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
     switch (e.*) {
@@ -185,14 +184,14 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
         return switch (op) {
             .OpNot => { // Boolean NOT operation
                 if (left != .complex_number) {
-                    return Expr.init(try left.getReal() == 0);
+                    return Expr.init(left.getReal() == 0);
                 }
                 warnBadOperation(op, left, null);
                 return EvalError.BadOperation;
             },
             .OpNegate => { // negation operation
                 return switch (left) {
-                    .boolean, .real_number => Expr.init(-(try left.getReal())),
+                    .boolean, .real_number => Expr.init(-(left.getReal())),
                     .complex_number => Expr.init(left.complex_number.neg()),
                     .vector => self.applyOp(lo, Expr.init(@as(exprs.real_number_type, -1.0)), .OpMul),
                     else => blk: {
@@ -203,12 +202,12 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             },
             .Pipe => { // compute magnitude of real number, complex number, or vector
                 return switch (left) {
-                    .boolean, .real_number => Expr.init(@abs(try left.getReal())),
-                    .complex_number => Expr.init((try left.getComplex()).magnitude()),
+                    .boolean, .real_number => Expr.init(@abs(left.getReal())),
+                    .complex_number => Expr.init(left.getComplex().magnitude()),
                     .vector => blk: {
                         var sum: exprs.real_number_type = 0.0;
                         for (left.vector) |expr| {
-                            sum += (try (try self.eval(expr)).getComplex()).squaredMagnitude();
+                            sum += (try self.eval(expr)).getComplex().squaredMagnitude();
                         }
                         const magnitude = @sqrt(sum);
                         break :blk Expr.init(magnitude);
@@ -237,8 +236,8 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             .OpUnaryNothing => left,
             .OpRoot => {
                 return switch (left) {
-                    .boolean, .real_number => Expr.init(@sqrt(try left.getReal())),
-                    .complex_number => Expr.init(std.math.complex.sqrt(try left.getComplex())),
+                    .boolean, .real_number => Expr.init(@sqrt(left.getReal())),
+                    .complex_number => Expr.init(std.math.complex.sqrt(left.getComplex())),
                     else => blk: {
                         warnBadOperation(op, left, null);
                         break :blk EvalError.BadOperation;
@@ -253,8 +252,8 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
     }
     const right = ro.?;
     if (left.isReal() and right.isReal()) {
-        const left_real = try left.getReal();
-        const right_real = try right.getReal();
+        const left_real = left.getReal();
+        const right_real = right.getReal();
         return switch (op) {
             .OpPow => Expr.init(std.math.pow(exprs.real_number_type, left_real, right_real)),
             .OpMul => Expr.init(left_real * right_real),
@@ -281,8 +280,8 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             },
         };
     } else if (left.isNumber() and right.isNumber()) {
-        const left_complex = try left.getComplex();
-        const right_complex = try right.getComplex();
+        const left_complex = left.getComplex();
+        const right_complex = right.getComplex();
         return switch (op) {
             .OpPow => Expr.init(std.math.complex.pow(left_complex, right_complex)),
             .OpMul => Expr.init(left_complex.mul(right_complex)),
@@ -333,7 +332,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
         return Expr{.string = str};
     } else if ((left == .vector or left == .string) and right == .real_number and op == .OpDot) {
         // vector/string index
-        const right_real = try right.getReal();
+        const right_real = right.getReal();
         if (!std.math.approxEqAbs(exprs.real_number_type, @trunc(right_real), right_real, epsilon)) {
             std.log.err("vectors and strings may only be indexed by a positive integer\n", .{});
             return EvalError.NonIntegerVectorIndex;
@@ -358,7 +357,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                 // n-dimensional dot product
                 var sum = Complex(exprs.real_number_type).init(0.0, 0.0);
                 for (0..left.vector.len) |i| {
-                    sum = sum.add(try (try self.applyOp(
+                    sum = sum.add((try self.applyOp(
                                 try self.eval(left.vector[i]),
                                 try self.eval(right.vector[i]),
                                 .OpMul)

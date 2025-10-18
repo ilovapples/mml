@@ -148,21 +148,18 @@ pub const Expr = union(enum) {
         self.printValue(temp_config) catch return;
     }
 
-    pub const GetRealError = error{NotRealNumberExpression};
-    pub const GetComplexError = error{NotComplexNumberExpression} || GetRealError;
-
-    pub fn getReal(self: Self) GetRealError!real_number_type {
+    pub fn getReal(self: Self) real_number_type {
         return switch (self) {
             .boolean => @floatFromInt(@intFromBool(self.boolean)),
             .real_number => self.real_number,
-            else => GetRealError.NotRealNumberExpression,
+            else => unreachable,
         };
     }
-    pub fn getComplex(self: Self) GetComplexError!Complex(real_number_type) {
+    pub fn getComplex(self: Self) Complex(real_number_type) {
         return switch (self) {
             .complex_number => self.complex_number,
-            .boolean, .real_number => Complex(real_number_type).init(try self.getReal(), 0),
-            else => GetComplexError.NotComplexNumberExpression,
+            .boolean, .real_number => Complex(real_number_type).init(self.getReal(), 0),
+            else => unreachable,
         };
     }
 

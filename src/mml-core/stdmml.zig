@@ -75,10 +75,7 @@ fn exprLessThan(c: struct { *Evaluator }, a: *Expr, b: *Expr) bool {
     const a_v: Expr = c.@"0".eval(a) catch return false;
     const b_v: Expr = c.@"0".eval(b) catch return false;
 
-    const a_r = a_v.getReal() catch return false;
-    const b_r = b_v.getReal() catch return false;
-    
-    return a_r < b_r;
+    return a_v.getReal() < b_v.getReal();
 }
 
 fn builtin_as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
@@ -87,12 +84,12 @@ fn builtin_as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
 
     if (std.mem.eql(u8, s.string, "complex") and e.isNumber()) { // -> complex
         if (e.isComplex()) return e;
-        if (e.isReal()) return Expr.init(Complex(exprs.real_number_type).init(try e.getReal(), 0.0));
+        if (e.isReal()) return Expr.init(Complex(exprs.real_number_type).init(e.getReal(), 0.0));
     } else if (std.mem.eql(u8, s.string, "integer") and e.isReal()) { // -> integer
-        return Expr.init(@as(i64, @intFromFloat(@trunc(try e.getReal()))));
+        return Expr.init(@as(i64, @intFromFloat(@trunc(e.getReal()))));
     } else if (std.mem.eql(u8, s.string, "real") and (e.isNumber() or e == .integer)) { // -> real
         return switch (e) {
-            .boolean, .real_number => Expr.init(try e.getReal()),
+            .boolean, .real_number => Expr.init(e.getReal()),
             .complex_number => if (Evaluator.dropComplexIfZeroImag(e.complex_number)) |c| Expr.init(c)
                 else Expr{.invalid = {}},
             .integer => Expr.init(@as(exprs.real_number_type, @floatFromInt(e.integer))),

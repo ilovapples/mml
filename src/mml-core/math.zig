@@ -100,9 +100,9 @@ fn logb(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     }
 
     if (a.isComplex() or b.isComplex()) {
-        return Expr.init(complex.log(try a.getComplex()).div(complex.log(try b.getComplex())));
+        return Expr.init(complex.log(a.getComplex()).div(complex.log(b.getComplex())));
     } else {
-        return Expr.init(std.math.log(exprs.real_number_type, try b.getReal(), try a.getReal()));
+        return Expr.init(std.math.log(exprs.real_number_type, b.getReal(), a.getReal()));
     }
 }
 

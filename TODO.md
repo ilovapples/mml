@@ -2,11 +2,12 @@
 - [x] check for unterminated string literal <br />
 - [x] add ~~'root'~~, ~~'atan2'~~, ~~'logb'~~ to lib/math and ~~'sort'~~ to lib/stdmml <br />
 - [x] add 'sign' function to lib/math <br />
-- [ ] finish fully implementing builtin functions/constants <br />
+- [x] finish fully implementing builtin functions/constants <br />
 - [ ] actually add the prompt because that initial commit message was a lie and it doesn't exist yet <br />
 - [x] change Expr printing functions to catch printing errors themselves because that's annoying <br />
-- [?] make evaluation return a smaller set of errors (i should be catching more of them) <br />
+- [x] make evaluation return a smaller set of errors (i should be catching more of them) <br />
 - [ ] also functions at some point would be good, but they're not a priority <br />
+- [ ] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works) <br/>
 
 # todos from [maths](https://github.com/ilovapples/maths)
 - [x] negation operator!! negative numbers are annoying without it <br />
