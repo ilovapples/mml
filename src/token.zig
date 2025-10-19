@@ -1,7 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
-const parser = @import("parser.zig");
+const parse = @import("parse.zig");
 
 pub const TokenType = enum(u32) {
     // operator tokens
@@ -66,7 +66,9 @@ pub const TokenType = enum(u32) {
     Whitespace,
     Eof,
 
-    pub fn stringify(self: @This()) ![]const u8 {
+    const Self = @This();
+
+    pub fn stringify(self: Self) ?[]const u8 {
         return switch (self) {
             .OpFuncCall => "func_name{args}",
             .OpDot => "'.'",
@@ -118,7 +120,7 @@ pub const TokenType = enum(u32) {
             .Pipe => "'|'",
             .Whitespace => "' '",
             .Eof => "end of the input string/file",
-            else => error.NoValidStringRepresentation,
+            else => "not a valid token",
         };
     }
 };
@@ -129,7 +131,7 @@ pub const Token = struct {
 
     const Self = @This();
 
-    pub fn init(string: []const u8, state: ?*const parser.ParserState) Self {
+    pub fn init(string: []const u8, state: ?*const parse.ParserState) Self {
         return if (string.len == 0) .{.string = string, .type = .Eof} else switch (string[0]) {
             '.', '^', '+', '-', '*', '/', '%',
             '(', ')', '{', '}', '[', ']', ',', ';',
@@ -515,4 +517,5 @@ test "token.toktype_by_char" {
     try expect(toktype_by_char['\\'] == .Backslash);
     try expect(toktype_by_char['~'] == .OpTilde);
     try expect(toktype_by_char['|'] == .Pipe);
+    try expect(toktype_by_char['&'] == .Amper);
 }

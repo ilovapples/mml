@@ -3,10 +3,10 @@ const Complex = std.math.Complex;
 const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
 
-const exprs = @import("expr.zig");
+const expr = @import("expr.zig");
+const Expr = expr.Expr;
 const token = @import("token.zig");
 const config_mod = @import("config.zig");
-const Expr = exprs.Expr;
 
 const math_lib = @import("mml-core/math.zig");
 const stdmml_lib = @import("mml-core/stdmml.zig");
@@ -82,6 +82,7 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
     switch (e.*) {
         .invalid => return EvalError.InvalidExpression,
         .vector,
+        .integer,
         .real_number,
         .complex_number,
         .boolean,
@@ -102,7 +103,7 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
                 }
             }
 
-            std.log.warn("undefined {s}identifier: '{s}{s}'\n", .{
+            std.log.warn("undefined {s}identifier: '{s}{s}'", .{
                 if (e.* == .builtin_ident) "builtin " else "",
                 if (e.* == .builtin_ident) "@" else "",
                 ident,
@@ -117,7 +118,7 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
 
     if (e.operation.op == .OpAssertEqual and left != null and left.?.* == .identifier) {
         if (right.?.searchFor(.{left.?.*.identifier}, containsIdentCheck)) |_| {
-            std.log.err("recursive dependency found in definition of '{s}'\n", .{left.?.identifier});
+            std.log.err("recursive dependency found in definition of '{s}'", .{left.?.identifier});
             return EvalError.RecursiveDefinitionError;
         }
         try self.variables.put(left.?.identifier, right.?);
@@ -148,19 +149,19 @@ fn applyFunc(self: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
     if (func_ident == .builtin_ident) {
         if (builtin_funcs_map.get(func_ident.builtin_ident)) |func| {
             if (func.n_args > 0 and func.n_args != args.len) {
-                std.log.err("expected {} arguments, got {}; in call to builtin function `@{s}`\n", .{func.n_args, args.len, func_ident.builtin_ident});
+                std.log.err("expected {} arguments, got {}; in call to builtin function `@{s}`", .{func.n_args, args.len, func_ident.builtin_ident});
                 return EvalError.WrongArgumentCount;
             }
             return try func.func(self, args);
         }
 
-        std.log.err("undefined builtin function `@{s}` in function call\n", .{func_ident.builtin_ident});
+        std.log.err("undefined builtin function `@{s}` in function call", .{func_ident.builtin_ident});
     }
     const func_name = func_ident.identifier;
 
     if (multiarg_funcs_map.get(func_name)) |func| {
         if (func.n_args > 0 and func.n_args != args.len) {
-            std.log.err("expected {} arguments, got {}; in call to function `{s}`\n", .{func.n_args, args.len, func_name});
+            std.log.err("expected {} arguments, got {}; in call to function `{s}`", .{func.n_args, args.len, func_name});
             return EvalError.WrongArgumentCount;
         }
         return try func.func(self, args);
@@ -168,7 +169,7 @@ fn applyFunc(self: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
 
     const first_arg = try self.eval(args[0]);
 
-    std.log.err("undefined function `{s}` for `{t}` type argument in function call\n", .{
+    std.log.err("undefined function `{s}` for `{t}` type argument in function call", .{
         func_name, first_arg,
     });
     return EvalError.BadFuncCall;
@@ -193,7 +194,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                 return switch (left) {
                     .boolean, .real_number => Expr.init(-(left.getReal())),
                     .complex_number => Expr.init(left.complex_number.neg()),
-                    .vector => self.applyOp(lo, Expr.init(@as(exprs.real_number_type, -1.0)), .OpMul),
+                    .vector => self.applyOp(lo, Expr.init(@as(f64, -1.0)), .OpMul),
                     else => blk: {
                         warnBadOperation(op, left, null);
                         break :blk EvalError.BadOperation;
@@ -205,9 +206,9 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                     .boolean, .real_number => Expr.init(@abs(left.getReal())),
                     .complex_number => Expr.init(left.getComplex().magnitude()),
                     .vector => blk: {
-                        var sum: exprs.real_number_type = 0.0;
-                        for (left.vector) |expr| {
-                            sum += (try self.eval(expr)).getComplex().squaredMagnitude();
+                        var sum: f64 = 0.0;
+                        for (left.vector) |e| {
+                            sum += (try self.eval(e)).getComplex().squaredMagnitude();
                         }
                         const magnitude = @sqrt(sum);
                         break :blk Expr.init(magnitude);
@@ -255,13 +256,13 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
         const left_real = left.getReal();
         const right_real = right.getReal();
         return switch (op) {
-            .OpPow => Expr.init(std.math.pow(exprs.real_number_type, left_real, right_real)),
+            .OpPow => Expr.init(std.math.pow(f64, left_real, right_real)),
             .OpMul => Expr.init(left_real * right_real),
             .OpDiv => Expr.init(left_real / right_real),
-            .OpMod => Expr.init(std.math.mod(exprs.real_number_type, left_real, right_real) catch |err| switch (err) {
-                    error.DivisionByZero => std.math.inf(exprs.real_number_type),
-                    error.NegativeDenominator => std.math.mod(exprs.real_number_type, left_real, @abs(right_real))
-                        catch std.math.nan(exprs.real_number_type),
+            .OpMod => Expr.init(std.math.mod(f64, left_real, right_real) catch |err| switch (err) {
+                    error.DivisionByZero => std.math.inf(f64),
+                    error.NegativeDenominator => std.math.mod(f64, left_real, @abs(right_real))
+                        catch std.math.nan(f64),
             }),
             .OpAdd => Expr.init(left_real + right_real),
             .OpSub => Expr.init(left_real - right_real),
@@ -269,11 +270,11 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             .OpGreater => Expr.init(left_real > right_real),
             .OpLessEq => Expr.init(left_real <= right_real),
             .OpGreaterEq => Expr.init(left_real >= right_real),
-            .OpEq => Expr.init(std.math.approxEqAbs(exprs.real_number_type, left_real, right_real, epsilon)),
-            .OpNotEq => Expr.init(!std.math.approxEqAbs(exprs.real_number_type, left_real, right_real, epsilon)),
+            .OpEq => Expr.init(std.math.approxEqAbs(f64, left_real, right_real, epsilon)),
+            .OpNotEq => Expr.init(!std.math.approxEqAbs(f64, left_real, right_real, epsilon)),
             .OpExactEq => Expr.init(left_real == right_real),
             .OpExactNotEq => Expr.init(left_real != right_real),
-            .OpRoot => Expr.init(std.math.pow(exprs.real_number_type, left_real, 1.0/right_real)),
+            .OpRoot => Expr.init(std.math.pow(f64, left_real, 1.0/right_real)),
             else => blk: {
                 warnBadOperation(op, left, right);
                 break :blk EvalError.BadOperation;
@@ -289,12 +290,12 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             .OpAdd => Expr.init(left_complex.add(right_complex)),
             .OpSub => Expr.init(left_complex.sub(right_complex)),
             .OpEq => Expr.init(
-                std.math.approxEqAbs(exprs.real_number_type, left_complex.re, right_complex.re, epsilon) and
-                std.math.approxEqAbs(exprs.real_number_type, left_complex.im, right_complex.im, epsilon)
+                std.math.approxEqAbs(f64, left_complex.re, right_complex.re, epsilon) and
+                std.math.approxEqAbs(f64, left_complex.im, right_complex.im, epsilon)
             ),
             .OpNotEq => Expr.init(!(
-                std.math.approxEqAbs(exprs.real_number_type, left_complex.re, right_complex.re, epsilon) and
-                std.math.approxEqAbs(exprs.real_number_type, left_complex.im, right_complex.im, epsilon)
+                std.math.approxEqAbs(f64, left_complex.re, right_complex.re, epsilon) and
+                std.math.approxEqAbs(f64, left_complex.im, right_complex.im, epsilon)
             )),
             .OpExactEq => Expr.init(left_complex.re == right_complex.re and left_complex.im == right_complex.im),
             .OpExactNotEq => Expr.init(!(left_complex.re == right_complex.re and left_complex.im == right_complex.im)),
@@ -330,23 +331,22 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             @memcpy(str[i*the_str.len..(i+1)*the_str.len], the_str);
         }
         return Expr{.string = str};
-    } else if ((left == .vector or left == .string) and right == .real_number and op == .OpDot) {
+    } else if ((left == .vector or left == .string) and right == .integer and op == .OpDot) {
         // vector/string index
-        const right_real = right.getReal();
-        if (!std.math.approxEqAbs(exprs.real_number_type, @trunc(right_real), right_real, epsilon)) {
-            std.log.err("vectors and strings may only be indexed by a positive integer\n", .{});
+        if (right.integer < 0) {
+            std.log.err("vectors and strings may only be indexed by a positive integer", .{});
             return EvalError.NonIntegerVectorIndex;
         }
-        const i: usize = @intFromFloat(@trunc(right_real));
+        const i: usize = @intCast(right.integer);
         if (left == .vector) {
             if (i >= left.vector.len) {
-                std.log.err("index {} out of range for vector of length {}\n", .{i, left.vector.len});
+                std.log.err("index {} out of range for vector of length {}", .{i, left.vector.len});
                 return EvalError.OutOfBoundsIndex;
             }
             return self.eval(left.vector[i]);
         } else if (left == .string) {
             if (i >= left.string.len) {
-                std.log.err("index {} out of range for string of length {}\n", .{i, left.string.len});
+                std.log.err("index {} out of range for string of length {}", .{i, left.string.len});
                 return EvalError.OutOfBoundsIndex;
             }
             return Expr.init(@as(i64, left.string[i]));
@@ -355,7 +355,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
         switch (op) {
             .OpMul => {
                 // n-dimensional dot product
-                var sum = Complex(exprs.real_number_type).init(0.0, 0.0);
+                var sum = Complex(f64).init(0.0, 0.0);
                 for (0..left.vector.len) |i| {
                     sum = sum.add((try self.applyOp(
                                 try self.eval(left.vector[i]),
@@ -408,11 +408,11 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
     return EvalError.BadOperation;
 }
 
-fn warnBadOperation(op: token.TokenType, lo: exprs.Expr, ro: ?exprs.Expr) void {
+fn warnBadOperation(op: token.TokenType, lo: expr.Expr, ro: ?expr.Expr) void {
     if (ro) |r| {
-        std.log.warn("failed to apply .{t} operator on '{t}' and '{t}' type operands\n" , .{op, lo, r});
+        std.log.warn("failed to apply .{t} operator on '{t}' and '{t}' type operands" , .{op, lo, r});
     } else {
-        std.log.warn("failed to apply .{t} operator to '{t}' type operand\n", .{op, lo});
+        std.log.warn("failed to apply .{t} operator to '{t}' type operand", .{op, lo});
     }
 }
 pub fn warnBadFuncArgument(
@@ -430,13 +430,13 @@ pub fn warnBadFuncArgument(
     writer.print("\ngot '{s}'", .{got_type_str}) catch return;
     std.log.warn("{s}", .{buffer[0..writer.end]});
 }
-pub fn dropComplexIfZeroImag(z: Complex(exprs.real_number_type)) ?exprs.real_number_type {
+pub fn dropComplexIfZeroImag(z: Complex(f64)) ?f64 {
     if (z.im != 0) return null;
     return z.re;
 }
 
 test "Evaluator.dropComplexIfZeroImag" {
-    try expect(dropComplexIfZeroImag(Complex(exprs.real_number_type).init(19.0, 0.0)).? == 19.0);
+    try expect(dropComplexIfZeroImag(Complex(f64).init(19.0, 0.0)).? == 19.0);
 }
 
 test "Evaluator.eval" {

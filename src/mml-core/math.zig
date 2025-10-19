@@ -10,9 +10,9 @@ pub fn initConstants(consts_map: *std.StringHashMap(Expr)) !void {
     try consts_map.put("pi", Expr.init(std.math.pi));
     try consts_map.put("e", Expr.init(std.math.e));
     try consts_map.put("phi", Expr.init(std.math.phi));
-    try consts_map.put("i", Expr.init(Complex(exprs.real_number_type).init(0.0, 1.0)));
-    try consts_map.put("nan", Expr.init(std.math.nan(exprs.real_number_type)));
-    try consts_map.put("inf", Expr.init(std.math.inf(exprs.real_number_type)));
+    try consts_map.put("i", Expr.init(Complex(f64).init(0.0, 1.0)));
+    try consts_map.put("nan", Expr.init(std.math.nan(f64)));
+    try consts_map.put("inf", Expr.init(std.math.inf(f64)));
 }
 
 pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
@@ -48,21 +48,21 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
 }
 
 fn ln(x: anytype) @TypeOf(x) {
-    return std.math.log(exprs.real_number_type, std.math.e, x);
+    return std.math.log(f64, std.math.e, x);
 }
 fn log2_c(z: anytype) @TypeOf(z) {
-    return complex.log(z).div(complex.log(Complex(exprs.real_number_type).init(2, 0)));
+    return complex.log(z).div(complex.log(Complex(f64).init(2, 0)));
 }
 fn log10_c(z: anytype) @TypeOf(z) {
-    return complex.log(z).div(complex.log(Complex(exprs.real_number_type).init(10, 0)));
+    return complex.log(z).div(complex.log(Complex(f64).init(10, 0)));
 }
-fn csqrt(x: anytype) Complex(exprs.real_number_type) {
-    return complex.sqrt(Complex(exprs.real_number_type).init(x, 0.0));
+fn csqrt(x: anytype) Complex(f64) {
+    return complex.sqrt(Complex(f64).init(x, 0.0));
 }
-fn real_c(z: anytype) exprs.real_number_type {
+fn real_c(z: anytype) f64 {
     return z.re;
 }
-fn imag_c(z: anytype) exprs.real_number_type {
+fn imag_c(z: anytype) f64 {
     return z.im;
 }
 fn root(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
@@ -102,7 +102,7 @@ fn logb(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     if (a.isComplex() or b.isComplex()) {
         return Expr.init(complex.log(a.getComplex()).div(complex.log(b.getComplex())));
     } else {
-        return Expr.init(std.math.log(exprs.real_number_type, b.getReal(), a.getReal()));
+        return Expr.init(std.math.log(f64, b.getReal(), a.getReal()));
     }
 }
 

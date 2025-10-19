@@ -10,7 +10,14 @@ pub fn build(b: *std.Build) void {
     // arg
     const arg_pkg_name: []const u8 = "arg_parse";
     const arg_pkg = b.createModule(.{
-        .root_source_file = b.path(extern_pkg_path ++ "/arg_parse/root.zig"),
+        .root_source_file = b.path(extern_pkg_path ++ "/" ++ arg_pkg_name ++ "/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    // term_manip
+    const term_manip_pkg_name: []const u8 = "term_manip";
+    const term_manip_pkg = b.createModule(.{
+        .root_source_file = b.path(extern_pkg_path ++ "/" ++ term_manip_pkg_name ++ "/root.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -40,6 +47,7 @@ pub fn build(b: *std.Build) void {
 
     main.linkLibrary(libmml);
     main.root_module.addImport(arg_pkg_name, arg_pkg);
+    main.root_module.addImport(term_manip_pkg_name, term_manip_pkg);
     main.root_module.addImport("mml", libmml.root_module);
     b.installArtifact(main);
 
@@ -60,4 +68,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_mod_tests.step);
 
     //libmml.step.dependOn(test_step);
+    //const install_and_test = b.step("test-and-build", "(doesn't work) Run tests and install "
+    //    ++ "(same as `install` and `test` steps combined)");
+    //install_and_test.dependOn(&main.step);
+    //install_and_test.dependOn(&run_mod_tests.step);
 }

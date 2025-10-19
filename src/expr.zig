@@ -11,29 +11,32 @@ pub const Oper = struct {
     op: token.TokenType,
 };
 
-pub const real_number_type = f64;
-
 pub const Expr = union(enum) {
     invalid: void,
     nothing: void,
+    code: Code,
     operation: Oper,
-    real_number: real_number_type,
-    complex_number: Complex(real_number_type),
+    real_number: f64,
+    complex_number: Complex(f64),
     boolean: bool,
     builtin_ident: []const u8,
     string: []const u8,
     identifier: []const u8,
     vector: []*Expr,
     integer: i64,
-    //mml_type: ,// something here
+
+    pub const Code = enum(usize) {
+        Exit,
+        ClearScreen,
+    };
 
     const Self = @This();
     pub const Kinds = @typeInfo(Expr).@"union".tag_type.?;
 
     pub fn init(val: anytype) Self {
         return switch (@TypeOf(val)) {
-            real_number_type, comptime_float => .{ .real_number = val },
-            Complex(real_number_type) => .{ .complex_number = val },
+            f64, comptime_float => .{ .real_number = val },
+            Complex(f64) => .{ .complex_number = val },
             bool => .{ .boolean = val },
             []const u8 => .{ .identifier = val },
             []*Expr => .{ .vector = val },
@@ -55,13 +58,13 @@ pub const Expr = union(enum) {
             w.flush() catch return;
             return;
         }
-        const expr = self.?;
-        switch (expr.*) {
+        const unwrapped_expr = self.?;
+        switch (unwrapped_expr.*) {
             .operation => {
-                w.print("Operation(.{t},\n", .{expr.operation.op}) catch return;
+                w.print("Operation(.{t},\n", .{unwrapped_expr.operation.op}) catch return;
 
-                Expr.printRecurse(expr.operation.left, config, indent+4);
-                if (expr.operation.right) |right| {
+                Expr.printRecurse(unwrapped_expr.operation.left, config, indent+4);
+                if (unwrapped_expr.operation.right) |right| {
                     w.writeAll(",\n") catch return;
                     Expr.printRecurse(right, config, indent+4);
                 }
@@ -70,22 +73,23 @@ pub const Expr = union(enum) {
                 printIndent(w, indent);
                 w.writeByte(')') catch return;
             },
-            .real_number => w.print("Real({f})", .{expr}) catch return,
-            .complex_number => w.print("Complex({f})", .{expr}) catch return,
-            .boolean => w.print("Bool({f})", .{expr}) catch return,
-            .identifier => w.print("Identifier('{s}'", .{expr.identifier}) catch return,
-            .builtin_ident => w.print("BuiltinIdent('@{s}'", .{expr.builtin_ident}) catch return,
-            .string => w.print("String('{s}'", .{expr.string}) catch return,
+            .real_number => w.print("Real({f})", .{unwrapped_expr}) catch return,
+            .complex_number => w.print("Complex({f})", .{unwrapped_expr}) catch return,
+            .boolean => w.print("Bool({f})", .{unwrapped_expr}) catch return,
+            .identifier => w.print("Identifier('{s}')", .{unwrapped_expr.identifier}) catch return,
+            .builtin_ident => w.print("BuiltinIdent('@{s}')", .{unwrapped_expr.builtin_ident}) catch return,
+            .string => w.print("String('{s}')", .{unwrapped_expr.string}) catch return,
             .vector => {
-                w.print("Vector(n={},\n", .{expr.vector.len}) catch return;
-                for (expr.vector) |e| {
+                w.print("Vector(n={},\n", .{unwrapped_expr.vector.len}) catch return;
+                for (unwrapped_expr.vector) |e| {
                     Expr.printRecurse(e, config, indent+4);
                     w.writeAll(",\n") catch return;
                 }
                 printIndent(w, indent);
                 w.writeByte(')') catch return;
             },
-            .integer => w.print("Integer({f})", .{expr}) catch return,
+            .integer => w.print("Integer({f})", .{unwrapped_expr}) catch return,
+            .code => w.print("Code(.{t})", .{unwrapped_expr.code}) catch return,
             else => w.writeAll("(null)") catch return,
         }
 
@@ -107,7 +111,7 @@ pub const Expr = union(enum) {
             }) catch return,
             .boolean => {
                 if (config.bools_print_as_nums) {
-                    w.print("{d}", .{@as(real_number_type, @floatFromInt(@intFromBool(self.boolean)))}) catch return;
+                    w.print("{d}", .{@as(f64, @floatFromInt(@intFromBool(self.boolean)))}) catch return;
                 } else {
                     w.writeAll(if (self.boolean) "true" else "false") catch return;
                 }
@@ -134,6 +138,7 @@ pub const Expr = union(enum) {
                 w.writeByte(']') catch return;
             },
             .integer => w.print("{}", .{self.integer}) catch return,
+            .code => w.print(".{t}", .{self.code}) catch return,
             else => w.writeAll("(null)") catch return,
         }
     }
@@ -148,17 +153,17 @@ pub const Expr = union(enum) {
         self.printValue(temp_config) catch return;
     }
 
-    pub fn getReal(self: Self) real_number_type {
+    pub fn getReal(self: Self) f64 {
         return switch (self) {
             .boolean => @floatFromInt(@intFromBool(self.boolean)),
             .real_number => self.real_number,
             else => unreachable,
         };
     }
-    pub fn getComplex(self: Self) Complex(real_number_type) {
+    pub fn getComplex(self: Self) Complex(f64) {
         return switch (self) {
             .complex_number => self.complex_number,
-            .boolean, .real_number => Complex(real_number_type).init(self.getReal(), 0),
+            .boolean, .real_number => Complex(f64).init(self.getReal(), 0),
             else => unreachable,
         };
     }
@@ -191,7 +196,7 @@ fn printIndent(w: *std.Io.Writer, indent: u32) void {
 }
 
 test "expr.getReal" {
-    const k = Expr.init(@as(real_number_type, 9.5));
-    try std.testing.expect(try k.getReal() == 9.5);
-    try std.testing.expect(try Expr.init(false).getReal() == 0.0);
+    const k = Expr.init(@as(f64, 9.5));
+    try std.testing.expect(k.getReal() == 9.5);
+    try std.testing.expect(Expr.init(false).getReal() == 0.0);
 }
