@@ -63,15 +63,16 @@ fn println(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     return Expr.init({});
 }
 fn sort(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
-    const vec = &args[0].vector;
-    const vec_expr = Expr{
-        .vector = try state.allocator.alloc(*Expr, vec.len),
-    };
+    const vec = try state.eval(args[0]);
+    if (!vec.expectType(.vector, "sort{v} takes a vector and returns it sorted")) {
+        return Evaluator.EvalError.BadFuncCall;
+    }
 
-    @memcpy(vec_expr.vector, vec.*);
-    std.sort.heap(*Expr, vec_expr.vector, .{state}, exprLessThan);
+    const sorted_vec = Expr{ .vector = try state.allocator.dupe(*Expr, vec.vector) };
 
-    return vec_expr;
+    std.sort.heap(*Expr, sorted_vec.vector, .{state}, exprLessThan);
+
+    return sorted_vec;
 }
 fn exprLessThan(c: struct { *Evaluator }, a: *Expr, b: *Expr) bool {
     const a_v: Expr = c.@"0".eval(a) catch return false;
@@ -81,7 +82,11 @@ fn exprLessThan(c: struct { *Evaluator }, a: *Expr, b: *Expr) bool {
 }
 
 fn builtin__as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+    const bad_call_msg = "@as{t, any} takes a type as a string, and a value ";
+
     const s = args[0].*; // string
+    if (!s.expectType(.string, bad_call_msg)) return Evaluator.EvalError.BadFuncCall;
+
     const e = try state.eval(args[1]);
 
     const ExprType = .{
@@ -99,10 +104,17 @@ fn builtin__as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     } else if (std.mem.eql(u8, s.string, ExprType.Real) and (e.isNumber() or e == .integer)) { // -> real
         return switch (e) {
             .boolean, .real_number => Expr.init(e.getReal()),
-            .complex_number => if (Evaluator.dropComplexIfZeroImag(e.complex_number)) |c| Expr.init(c)
-                else Expr{.invalid = {}},
+            .complex_number => if (Evaluator.dropComplexIfZeroImag(e.complex_number)) |c|
+                Expr.init(c)
+            else blk: {
+                std.log.err("{s}", .{bad_call_msg});
+                break :blk Evaluator.EvalError.BadFuncCall;
+            },
             .integer => Expr.init(@as(f64, @floatFromInt(e.integer))),
-            else => Expr{.invalid = {}},
+            else => blk: {
+                std.log.err("{s}", .{bad_call_msg});
+                break :blk Evaluator.EvalError.BadFuncCall;
+            },
         };
     } else if (std.mem.eql(u8, s.string, ExprType.String)) { // -> string
         const buffer = try state.allocator.alloc(u8, 512);
@@ -118,8 +130,9 @@ fn builtin__as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
 }
 
 fn builtin__undef(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
-    if (args[0].* != .identifier) return Evaluator.EvalError.BadFuncCall;
-    const ident = args[0].*.identifier;
+    const e = args[0].*;
+
+    if (!e.expectType(.identifier, "@undef{ident} takes an identifier")) return Evaluator.EvalError.BadFuncCall;
     
-    return Expr.init(state.variables.remove(ident));
+    return Expr.init(state.variables.remove(e.identifier));
 }

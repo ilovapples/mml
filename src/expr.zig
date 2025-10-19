@@ -189,6 +189,14 @@ pub const Expr = union(enum) {
             return self;
         return null;
     }
+
+    pub fn expectType(self: Self, kind: Kinds, msg: []const u8) bool {
+        if (self == kind) return true;
+
+        std.log.warn("expected '{t}' type, got '{t}': {s}", .{kind, self, msg});
+
+        return false;
+    }
 };
 
 fn printIndent(w: *std.Io.Writer, indent: u32) void {

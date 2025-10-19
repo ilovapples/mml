@@ -16,7 +16,7 @@
 - [x] copy contents of strings need into the Expr.string field, instead of just saving their position
 * [x] can merge prompt branch
     - [x] special codes (new Expr type) stored in constants that can interact with certain parts of the application (such as the prompt) (like `exit` and `clear` and such)
-- [ ] add a (zig) function to assert that an Expr is of a certain type and log an error if not
+- [x] add a (zig) function to assert that an Expr is of a certain type and log an error if not
 * [ ] documentation related features
     - [ ] partially automated generation of a list of all functions that are implemented (with a command-line option to show it)
     - [ ] copy over syntax guide from [maths](https://github.com/ilovapples/maths) because it's basically the same thing, but update with new stuff (and rewrite the first paragraph, it's practically illegible)
