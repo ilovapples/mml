@@ -1,0 +1,52 @@
+MML Interactive Prompt 0.1.0 (zig ver.)
+Type 'exit'+Enter or ctrl+d to quit the prompt
+>> X=(-b + ~csqrt{b^2 - 4*a*c})/(2a)
+warning: undefined identifier: 'b'
+────────────
+(null)
+────────────
+>> X
+warning: undefined identifier: 'b'
+────────────
+(null)
+────────────
+>> a=3
+────────────
+3
+────────────
+>> b=5
+────────────
+5
+────────────
+>> c=-8
+────────────
+-8
+────────────
+>> X
+────────────
+[1+0i, -2.6666666666666665+0i]
+────────────
+>> X.0
+thread 347974 panic: access of union field 'operation' while field 'integer' is active
+./home/asher/Coding/c/mml-zig/src/Evaluator.zig:115:19: 0x117bfe8 in evalRecurse (root.zig)
+const left = e.operation.left;
+^
+/home/asher/Coding/c/mml-zig/src/Evaluator.zig:138:44: 0x117cda0 in evalRecurse (root.zig)
+if (right) |r| try self.evalRecurse(r) else null,
+^
+/home/asher/Coding/c/mml-zig/src/Evaluator.zig:143:41: 0x1162103 in eval (root.zig)
+self.last_val = try self.evalRecurse(e);
+^
+/home/asher/Coding/c/mml-zig/src/prompt.zig:61:40: 0x1162c30 in runPrompt (main.zig)
+val = conf.evaluator.?.eval(e) catch .{.invalid = {}};
+^
+/home/asher/Coding/c/mml-zig/src/main.zig:86:41: 0x116419b in main (main.zig)
+const res = try prompt.runPrompt(&stdin_reader, &conf);
+^
+/usr/lib/zig/std/start.zig:627:37: 0x1166259 in posixCallMainAndExit (std.zig)
+const result = root.main() catch |err| {
+^
+/usr/lib/zig/std/start.zig:232:5: 0x115a331 in _start (std.zig)
+asm volatile (switch (native_arch) {
+^
+???:?:?: 0x0 in ??? (???)

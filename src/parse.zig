@@ -132,7 +132,7 @@ pub const ParserState = struct {
                 if (tok.type != .CloseBracket and tok.type != .Comma) {
                     // maybe I should use zig error unions for this kind of thing...
                     std.log.err("unexpected token .{t} ({s}) found after element in vector "
-                             ++ "literal (expected .CloseBracket (']') or .Comma (','))\n", .{
+                             ++ "literal (expected .CloseBracket (']') or .Comma (','))", .{
                         tok.type, tok.type.stringify().?});
 
                     return ParseError.UnterminatedVectorLiteral;
@@ -142,7 +142,7 @@ pub const ParserState = struct {
             left.* = @unionInit(Expr, "vector", try temp_arrlist.toOwnedSlice(self.allocator.?));
         } else if (tok.type == .Pipe) {
             if (self.peekToken().type == .Pipe) {
-                std.log.err("expected expression in pipe block ({s})\n", .{
+                std.log.err("expected expression in pipe block ({s})", .{
                     token.TokenType.Pipe.stringify().?});
                 return ParseError.ExpectedExpr;
             }
@@ -172,19 +172,19 @@ pub const ParserState = struct {
                     std.fmt.ParseIntError.Overflow => {
                         std.log.err("integer read as '{s}' has a magnitude "
                                  ++ "larger than about 9.2 quintillion (2^63). "
-								 ++ "assuming infinity.\n", .{tok.string});
+								 ++ "assuming infinity.", .{tok.string});
 						break :blk std.math.maxInt(i64);
                     },
                     std.fmt.ParseIntError.InvalidCharacter => {
 						std.log.err("failed to read '{s}' as an integer. "
-								 ++ "assuming 0.\n", .{tok.string});
+								 ++ "assuming 0.", .{tok.string});
 						break :blk 0;
 					},
 				});
             } else {
                 left.* = @unionInit(Expr, "real_number", std.fmt.parseFloat(f64, tok.string) catch blk: {
 					std.log.err("failed to read '{s}' as a real number. "
-						     ++ "assuming NaN (not a number).\n", .{tok.string});
+						     ++ "assuming NaN (not a number).", .{tok.string});
 					break :blk std.math.nan(f64);
 				});
             }
@@ -224,9 +224,9 @@ pub const ParserState = struct {
             if (op_tok.type == .OpDot) self.looking_for_int = true;
 
             const right = self.parseExprRecurse(if (op_tok.isRightAssocOp()) preced else preced - 1) catch {
-                std.log.err("expected expression after operator .{t} ({s})\n", .{
+                std.log.err("expected expression after operator .{t} ({s})", .{
                     op_tok.type,
-					op_tok.type.stringify() orelse "you shouldn't ever see this text; please post an issue",
+                    op_tok.type.stringify() orelse "you shouldn't ever see this text; please post an issue",
                 });
                 return ParseError.ExpectedExpr;
             };

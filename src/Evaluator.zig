@@ -3,10 +3,10 @@ const Complex = std.math.Complex;
 const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
 
-const exprs = @import("expr.zig");
+const expr = @import("expr.zig");
+const Expr = expr.Expr;
 const token = @import("token.zig");
 const config_mod = @import("config.zig");
-const Expr = exprs.Expr;
 
 const math_lib = @import("mml-core/math.zig");
 const stdmml_lib = @import("mml-core/stdmml.zig");
@@ -102,7 +102,7 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
                 }
             }
 
-            std.log.warn("undefined {s}identifier: '{s}{s}'\n", .{
+            std.log.warn("undefined {s}identifier: '{s}{s}'", .{
                 if (e.* == .builtin_ident) "builtin " else "",
                 if (e.* == .builtin_ident) "@" else "",
                 ident,
@@ -117,7 +117,7 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
 
     if (e.operation.op == .OpAssertEqual and left != null and left.?.* == .identifier) {
         if (right.?.searchFor(.{left.?.*.identifier}, containsIdentCheck)) |_| {
-            std.log.err("recursive dependency found in definition of '{s}'\n", .{left.?.identifier});
+            std.log.err("recursive dependency found in definition of '{s}'", .{left.?.identifier});
             return EvalError.RecursiveDefinitionError;
         }
         try self.variables.put(left.?.identifier, right.?);
@@ -148,19 +148,19 @@ fn applyFunc(self: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
     if (func_ident == .builtin_ident) {
         if (builtin_funcs_map.get(func_ident.builtin_ident)) |func| {
             if (func.n_args > 0 and func.n_args != args.len) {
-                std.log.err("expected {} arguments, got {}; in call to builtin function `@{s}`\n", .{func.n_args, args.len, func_ident.builtin_ident});
+                std.log.err("expected {} arguments, got {}; in call to builtin function `@{s}`", .{func.n_args, args.len, func_ident.builtin_ident});
                 return EvalError.WrongArgumentCount;
             }
             return try func.func(self, args);
         }
 
-        std.log.err("undefined builtin function `@{s}` in function call\n", .{func_ident.builtin_ident});
+        std.log.err("undefined builtin function `@{s}` in function call", .{func_ident.builtin_ident});
     }
     const func_name = func_ident.identifier;
 
     if (multiarg_funcs_map.get(func_name)) |func| {
         if (func.n_args > 0 and func.n_args != args.len) {
-            std.log.err("expected {} arguments, got {}; in call to function `{s}`\n", .{func.n_args, args.len, func_name});
+            std.log.err("expected {} arguments, got {}; in call to function `{s}`", .{func.n_args, args.len, func_name});
             return EvalError.WrongArgumentCount;
         }
         return try func.func(self, args);
@@ -168,7 +168,7 @@ fn applyFunc(self: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
 
     const first_arg = try self.eval(args[0]);
 
-    std.log.err("undefined function `{s}` for `{t}` type argument in function call\n", .{
+    std.log.err("undefined function `{s}` for `{t}` type argument in function call", .{
         func_name, first_arg,
     });
     return EvalError.BadFuncCall;
@@ -206,8 +206,8 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                     .complex_number => Expr.init(left.getComplex().magnitude()),
                     .vector => blk: {
                         var sum: f64 = 0.0;
-                        for (left.vector) |expr| {
-                            sum += (try self.eval(expr)).getComplex().squaredMagnitude();
+                        for (left.vector) |e| {
+                            sum += (try self.eval(e)).getComplex().squaredMagnitude();
                         }
                         const magnitude = @sqrt(sum);
                         break :blk Expr.init(magnitude);
@@ -334,19 +334,19 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
         // vector/string index
         const right_real = right.getReal();
         if (!std.math.approxEqAbs(f64, @trunc(right_real), right_real, epsilon)) {
-            std.log.err("vectors and strings may only be indexed by a positive integer\n", .{});
+            std.log.err("vectors and strings may only be indexed by a positive integer", .{});
             return EvalError.NonIntegerVectorIndex;
         }
         const i: usize = @intFromFloat(@trunc(right_real));
         if (left == .vector) {
             if (i >= left.vector.len) {
-                std.log.err("index {} out of range for vector of length {}\n", .{i, left.vector.len});
+                std.log.err("index {} out of range for vector of length {}", .{i, left.vector.len});
                 return EvalError.OutOfBoundsIndex;
             }
             return self.eval(left.vector[i]);
         } else if (left == .string) {
             if (i >= left.string.len) {
-                std.log.err("index {} out of range for string of length {}\n", .{i, left.string.len});
+                std.log.err("index {} out of range for string of length {}", .{i, left.string.len});
                 return EvalError.OutOfBoundsIndex;
             }
             return Expr.init(@as(i64, left.string[i]));
@@ -408,11 +408,11 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
     return EvalError.BadOperation;
 }
 
-fn warnBadOperation(op: token.TokenType, lo: exprs.Expr, ro: ?exprs.Expr) void {
+fn warnBadOperation(op: token.TokenType, lo: expr.Expr, ro: ?expr.Expr) void {
     if (ro) |r| {
-        std.log.warn("failed to apply .{t} operator on '{t}' and '{t}' type operands\n" , .{op, lo, r});
+        std.log.warn("failed to apply .{t} operator on '{t}' and '{t}' type operands" , .{op, lo, r});
     } else {
-        std.log.warn("failed to apply .{t} operator to '{t}' type operand\n", .{op, lo});
+        std.log.warn("failed to apply .{t} operator to '{t}' type operand", .{op, lo});
     }
 }
 pub fn warnBadFuncArgument(

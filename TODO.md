@@ -3,11 +3,16 @@
 - [x] add ~~'root'~~, ~~'atan2'~~, ~~'logb'~~ to lib/math and ~~'sort'~~ to lib/stdmml <br />
 - [x] add 'sign' function to lib/math <br />
 - [x] finish fully implementing builtin functions/constants <br />
-- [ ] actually add the prompt because that initial commit message was a lie and it doesn't exist yet <br />
+- [x] actually add the prompt because that initial commit message was a lie and it doesn't exist yet <br />
 - [x] change Expr printing functions to catch printing errors themselves because that's annoying <br />
 - [x] make evaluation return a smaller set of errors (i should be catching more of them) <br />
 - [ ] also functions at some point would be good, but they're not a priority <br />
 - [ ] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works) <br/>
+- [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
+- [ ] special codes (new Expr type) stored in constants that can interact with certain parts of the application (such as the prompt)
+- [ ] fix the error message in [tests/bug1.log](tests/bug1.log)
+- [ ] add debug output to indicate when parsing and evaluation are complete and how long it took (with `--debug` flag)
+- [ ] @undef(ident) builtin to undefine an identifier
 
 # todos from [maths](https://github.com/ilovapples/maths)
 - [x] negation operator!! negative numbers are annoying without it <br />

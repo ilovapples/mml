@@ -1,7 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
-const parser = @import("parser.zig");
+const parse = @import("parse.zig");
 
 pub const TokenType = enum(u32) {
     // operator tokens
@@ -129,7 +129,7 @@ pub const Token = struct {
 
     const Self = @This();
 
-    pub fn init(string: []const u8, state: ?*const parser.ParserState) Self {
+    pub fn init(string: []const u8, state: ?*const parse.ParserState) Self {
         return if (string.len == 0) .{.string = string, .type = .Eof} else switch (string[0]) {
             '.', '^', '+', '-', '*', '/', '%',
             '(', ')', '{', '}', '[', ']', ',', ';',

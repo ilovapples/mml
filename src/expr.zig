@@ -190,6 +190,6 @@ fn printIndent(w: *std.Io.Writer, indent: u32) void {
 
 test "expr.getReal" {
     const k = Expr.init(@as(f64, 9.5));
-    try std.testing.expect(try k.getReal() == 9.5);
-    try std.testing.expect(try Expr.init(false).getReal() == 0.0);
+    try std.testing.expect(k.getReal() == 9.5);
+    try std.testing.expect(Expr.init(false).getReal() == 0.0);
 }

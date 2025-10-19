@@ -1,24 +1,37 @@
 const std = @import("std");
 const Io = std.Io;
 const IoLimit = Io.Limit;
-const linux = std.os.linux;
+const posix = std.posix;
 
 const ArgParser = @import("arg_parse").ArgParser;
 
 const mml = @import("mml");
 const Config = mml.config.Config;
 const Expr = mml.expr.Expr;
-const parser = mml.parser;
+const parse = mml.parse;
 const Evaluator = mml.Evaluator;
+
+const term_manip = @import("term_manip");
+const prompt = @import("prompt.zig");
+
+var stdout_w: *Io.Writer = undefined;
+var stdin_reader: std.fs.File.Reader = undefined;
 
 pub fn main() !void {
     // I/O setup
-    //var stdin_buffer: [512]u8 = undefined;
-    //var stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
+    var stdin_buffer: [512]u8 = undefined;
+    stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
 
     var stdout_buffer: [512]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    const stdout = &stdout_writer.interface;
+    stdout_w = &stdout_writer.interface;
+
+    // signal handler setup for SIGINT (Ctrl+C/^C)
+    posix.sigaction(posix.SIG.INT, &.{
+        .handler = .{ .handler = interruptHandler },
+        .mask = posix.sigemptyset(),
+        .flags = 0,
+    }, null);
 
     // arena & allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
@@ -39,84 +52,81 @@ pub fn main() !void {
     const expr_str = arg_parser.option([]const u8, "expr", "the expression to evaluate") orelse "(3+9^2) * 15";
     
     // config
-    var my_config: Config = .{
-        .writer = stdout,
+    var conf: Config = .{
+        .writer = stdout_w,
     };
 
-    if (arg_parser.option(bool, "repl", "(not fully implemented) use an interactive prompt (REPL)") orelse false) {
-        @panic("REPL is not fully implemented, so you can't use it yet");
-        //try runPrompt(&stdin_reader, stdout);
-        //return;
-    }
-    my_config.bools_print_as_nums = arg_parser.option(bool,
+    const start_repl = arg_parser.option(bool,
+        "repl", "(not fully implemented) use an interactive prompt (REPL)") orelse false;
+    // this option will be used at some point, but it's just here for now
+    _ = arg_parser.option(bool, "debug", "enable debug output across the program") orelse false;
+
+    conf.bools_print_as_nums = arg_parser.option(bool,
         "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
-    my_config.decimal_precision = arg_parser.option(u32,
+    conf.decimal_precision = arg_parser.option(u32,
         "precision", "(WARNING: unused) precision to use when displaying decimals") orelse 6;
-    my_config.quote_strings = arg_parser.option(bool,
+    conf.quote_strings = arg_parser.option(bool,
         "quote-strings", "if set, strings print surrounded by double quotes") orelse false;
 
     const print_usage = arg_parser.option(bool, "help", "display usage information") orelse false;
     if (print_usage) {
-        arg_parser.printUsage(stdout);
-        try stdout.flush();
+        arg_parser.printUsage(stdout_w);
+        try stdout_w.flush();
         std.process.exit(1);
     }
 
     // evaluator
-    var eval = try Evaluator.init(allocator, &my_config);
+    var eval = try Evaluator.init(allocator, &conf);
     defer eval.deinit();
 
-    my_config.evaluator = &eval;
+    conf.evaluator = &eval;
+
+    if (start_repl) {
+        defer _ = term_manip.restoreTerminal(&stdin_reader.file);
+        std.debug.assert(&conf == &conf);
+        const res = try prompt.runPrompt(&stdin_reader, &conf);
+        try stdout_w.writeAll("\x1b[0 q\x1b[?25h");
+        try stdout_w.flush();
+        if (res != 0) std.process.exit(1)
+            else return;
+    }
 
     if (!arg_parser.finalize()) {
-        try stdout.writeByte('\n');
-        arg_parser.printUsage(stdout);
-        try stdout.flush();
+        try stdout_w.writeByte('\n');
+        arg_parser.printUsage(stdout_w);
+        try stdout_w.flush();
         std.process.exit(1);
     }
 
     // parsing & evaluating
-    const exprs = parser.parseStatements(expr_str, allocator) catch {
+    const exprs = parse.parseStatements(expr_str, allocator) catch {
         std.log.err("failed to parse expressions from source: '{s}'\n", .{expr_str});
         return;
     };
 
-    var val: Expr = Expr{.invalid = {}};
+    var val: Expr = .{.invalid = {}};
     for (exprs) |e| {
-        val = eval.eval(e) catch Expr{.invalid = {}};
+        val = eval.eval(e) catch .{.invalid = {}};
     }
-    try val.printValue(my_config);
+    try val.printValue(conf);
 
-    try stdout.flush();
+    try stdout_w.flush();
 }
 
-fn runPrompt(stdin_reader: *std.fs.File.Reader, stdout: *Io.Writer) !void {
-    const prompt_str = ">> ";
+const its_ok_to_print_in_signal_handler = true;
+fn interruptHandler(signum: i32) callconv(.c) void {
+    _ = term_manip.restoreTerminal(&stdin_reader.file);
+    stdout_w.writeAll("\x1b[?25h") catch {}; // make cursor visible
 
-    try stdout.writeAll(
-        "MML Interactive Prompt 0.1.0 (zig ver.)\n"
-     ++ "Type 'exit'+Enter or ctrl+d to quit the prompt\n");
+    if (its_ok_to_print_in_signal_handler) {
+        stdout_w.print("terminated with signum {}", .{signum}) catch {};
+        switch (signum) {
+            posix.SIG.INT => stdout_w.writeAll(": Ctrl+C interrupt") catch {},
+            else => {},
+        }
+        stdout_w.writeByte('\n') catch {};
+        stdout_w.flush() catch {};
+    }
 
-    try stdout.writeAll(prompt_str);
-    try stdout.flush();
-
-    var line_buffer: [512]u8 = undefined;
-    const line_len = try readLine(stdin_reader, &line_buffer);
- 
-    try stdout.print("buf: '{s}'\n", .{line_buffer[0..line_len]});
-
-    try stdout.flush();
-}
-
-fn readLine(reader: *std.fs.File.Reader, out: []u8) !usize {
-    var w = Io.Writer.fixed(out[0..]);
-    const r = &reader.interface;
-    linux.tcgetattr(reader.file.handle, );
-    return r.streamDelimiterLimit(&w, '\n', IoLimit.limited(out.len));
-}
-
-var saved_termios: ?linux.termios = null;
-fn setTerminalRawMode(file: *const std.fs.File) void {
-    linux.tcgetattr(file.handle, &(saved_termios.?));
-    var new_termios = saved_termios.?;
+    std.process.exit(2);
 }
