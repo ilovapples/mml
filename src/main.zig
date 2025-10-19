@@ -58,8 +58,8 @@ pub fn main() !void {
 
     const start_repl = arg_parser.option(bool,
         "repl", "(not fully implemented) use an interactive prompt (REPL)") orelse false;
-    // this option will be used at some point, but it's just here for now
-    _ = arg_parser.option(bool, "debug", "enable debug output across the program") orelse false;
+
+    conf.debug_output = arg_parser.option(bool, "debug", "enable debug output across the program") orelse false;
 
     conf.bools_print_as_nums = arg_parser.option(bool,
         "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;

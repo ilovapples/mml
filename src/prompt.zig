@@ -49,16 +49,30 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         // start '...' loop to satisfy the user while the parser is parsing (because it's really slow in some cases)
         _ = try std.Thread.spawn(.{}, dotDotDotThread, .{ tty_writer, &eval_finished });
 
+        const start_parse_time = std.time.nanoTimestamp();
         // parse line into expressions
         const exprs = parse.parseStatements(line_buffer[0..line_len.?], conf.evaluator.?.allocator) catch {
             eval_finished.store(true, AtomicOrder.release);
             continue;
         };
+        const end_parse_time = std.time.nanoTimestamp();
+        if (conf.debug_output) {
+            try tty_writer.print("Parsed in {} ms\n", .{
+                @divTrunc(end_parse_time - start_parse_time, std.time.ns_per_ms)
+            });
+        }
 
+        const start_eval_time = std.time.nanoTimestamp();
         // evaluate expressions
         var val: Expr = .{.invalid = {}};
         for (exprs) |e| {
             val = conf.evaluator.?.eval(e) catch .{.invalid = {}};
+        }
+        const end_eval_time = std.time.nanoTimestamp();
+        if (conf.debug_output) {
+            try tty_writer.print("\rEvaluated in {} ms\n", .{
+                @divTrunc(end_eval_time - start_eval_time, std.time.ns_per_ms)
+            });
         }
 
         eval_finished.store(true, AtomicOrder.release);
