@@ -77,6 +77,13 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
 
         eval_finished.store(true, AtomicOrder.release);
 
+        if (val == .code) {
+            switch (val.code) {
+                .Exit => break,
+                .ClearScreen => try tty_writer.writeAll("\x1b[1;1f\x1b[2J"),
+            }
+            continue;
+        }
         // strings should be quoted when printing from the prompt
         const saved_quote_strings = conf.quote_strings;
         conf.quote_strings = true;

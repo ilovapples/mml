@@ -14,6 +14,7 @@ pub const Oper = struct {
 pub const Expr = union(enum) {
     invalid: void,
     nothing: void,
+    code: Code,
     operation: Oper,
     real_number: f64,
     complex_number: Complex(f64),
@@ -23,7 +24,11 @@ pub const Expr = union(enum) {
     identifier: []const u8,
     vector: []*Expr,
     integer: i64,
-    //mml_type: ,// something here
+
+    pub const Code = enum(usize) {
+        Exit,
+        ClearScreen,
+    };
 
     const Self = @This();
     pub const Kinds = @typeInfo(Expr).@"union".tag_type.?;
@@ -53,13 +58,13 @@ pub const Expr = union(enum) {
             w.flush() catch return;
             return;
         }
-        const expr = self.?;
-        switch (expr.*) {
+        const unwrapped_expr = self.?;
+        switch (unwrapped_expr.*) {
             .operation => {
-                w.print("Operation(.{t},\n", .{expr.operation.op}) catch return;
+                w.print("Operation(.{t},\n", .{unwrapped_expr.operation.op}) catch return;
 
-                Expr.printRecurse(expr.operation.left, config, indent+4);
-                if (expr.operation.right) |right| {
+                Expr.printRecurse(unwrapped_expr.operation.left, config, indent+4);
+                if (unwrapped_expr.operation.right) |right| {
                     w.writeAll(",\n") catch return;
                     Expr.printRecurse(right, config, indent+4);
                 }
@@ -68,22 +73,23 @@ pub const Expr = union(enum) {
                 printIndent(w, indent);
                 w.writeByte(')') catch return;
             },
-            .real_number => w.print("Real({f})", .{expr}) catch return,
-            .complex_number => w.print("Complex({f})", .{expr}) catch return,
-            .boolean => w.print("Bool({f})", .{expr}) catch return,
-            .identifier => w.print("Identifier('{s}'", .{expr.identifier}) catch return,
-            .builtin_ident => w.print("BuiltinIdent('@{s}'", .{expr.builtin_ident}) catch return,
-            .string => w.print("String('{s}'", .{expr.string}) catch return,
+            .real_number => w.print("Real({f})", .{unwrapped_expr}) catch return,
+            .complex_number => w.print("Complex({f})", .{unwrapped_expr}) catch return,
+            .boolean => w.print("Bool({f})", .{unwrapped_expr}) catch return,
+            .identifier => w.print("Identifier('{s}')", .{unwrapped_expr.identifier}) catch return,
+            .builtin_ident => w.print("BuiltinIdent('@{s}')", .{unwrapped_expr.builtin_ident}) catch return,
+            .string => w.print("String('{s}')", .{unwrapped_expr.string}) catch return,
             .vector => {
-                w.print("Vector(n={},\n", .{expr.vector.len}) catch return;
-                for (expr.vector) |e| {
+                w.print("Vector(n={},\n", .{unwrapped_expr.vector.len}) catch return;
+                for (unwrapped_expr.vector) |e| {
                     Expr.printRecurse(e, config, indent+2);
                     w.writeAll(",\n") catch return;
                 }
                 printIndent(w, indent);
                 w.writeByte(')') catch return;
             },
-            .integer => w.print("Integer({f})", .{expr}) catch return,
+            .integer => w.print("Integer({f})", .{unwrapped_expr}) catch return,
+            .code => w.print("Code(.{t})", .{unwrapped_expr.code}) catch return,
             else => w.writeAll("(null)") catch return,
         }
 
@@ -132,6 +138,7 @@ pub const Expr = union(enum) {
                 w.writeByte(']') catch return;
             },
             .integer => w.print("{}", .{self.integer}) catch return,
+            .code => w.print(".{t}", .{self.code}) catch return,
             else => w.writeAll("(null)") catch return,
         }
     }
