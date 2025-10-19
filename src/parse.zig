@@ -104,11 +104,9 @@ pub const ParserState = struct {
                 }
             } else {
                 if (tok.type == .Ident) {
-                    left.* = @unionInit(Expr, "identifier",
-                        try self.allocator.?.dupe(u8, tok.string));
+                    left.* = @unionInit(Expr, "identifier", try self.allocator.?.dupe(u8, tok.string));
                 } else {
-                    left.* = @unionInit(Expr, "builtin_ident",
-                        try self.allocator.?.dupe(u8, tok.string));
+                    left.* = @unionInit(Expr, "builtin_ident", try self.allocator.?.dupe(u8, tok.string));
                 }
             }
         } else if (tok.type == .OpenParen) { // parentheses
@@ -190,9 +188,8 @@ pub const ParserState = struct {
             }
             self.looking_for_int = false;
         } else if (tok.type == .String) {
-            left.* = @unionInit(Expr, "string", tok.string[1..tok.string.len-1]);
-        } else if (tok.type == .BuiltinIdent) {
-            left.* = @unionInit(Expr, "builtin_ident", tok.string[1..tok.string.len]);
+            left.* = @unionInit(Expr, "string", 
+                try self.allocator.?.dupe(u8, tok.string[1..tok.string.len-1]));
         } else {
             std.log.err("null expression. found token .{t} ({s})", .{
 				tok.type,

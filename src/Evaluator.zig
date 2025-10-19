@@ -82,6 +82,7 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
     switch (e.*) {
         .invalid => return EvalError.InvalidExpression,
         .vector,
+        .integer,
         .real_number,
         .complex_number,
         .boolean,
@@ -330,14 +331,13 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             @memcpy(str[i*the_str.len..(i+1)*the_str.len], the_str);
         }
         return Expr{.string = str};
-    } else if ((left == .vector or left == .string) and right == .real_number and op == .OpDot) {
+    } else if ((left == .vector or left == .string) and right == .integer and op == .OpDot) {
         // vector/string index
-        const right_real = right.getReal();
-        if (!std.math.approxEqAbs(f64, @trunc(right_real), right_real, epsilon)) {
+        if (right.integer < 0) {
             std.log.err("vectors and strings may only be indexed by a positive integer", .{});
             return EvalError.NonIntegerVectorIndex;
         }
-        const i: usize = @intFromFloat(@trunc(right_real));
+        const i: usize = @intCast(right.integer);
         if (left == .vector) {
             if (i >= left.vector.len) {
                 std.log.err("index {} out of range for vector of length {}", .{i, left.vector.len});

@@ -13,6 +13,8 @@
 - [ ] fix the error message in [tests/bug1.log](tests/bug1.log)
 - [ ] add debug output to indicate when parsing and evaluation are complete and how long it took (with `--debug` flag)
 - [ ] @undef(ident) builtin to undefine an identifier
+- [ ] somehow fix print{...} printed stuff showing up to the left of the output bars (maybe remove the bars?)
+- [x] copy contents of strings need into the Expr.string field, instead of just saving their position
 
 # todos from [maths](https://github.com/ilovapples/maths)
 - [x] negation operator!! negative numbers are annoying without it <br />
