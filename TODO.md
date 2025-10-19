@@ -7,13 +7,13 @@
 - [x] change Expr printing functions to catch printing errors themselves because that's annoying <br />
 - [x] make evaluation return a smaller set of errors (i should be catching more of them) <br />
 - [ ] also functions at some point would be good, but they're not a priority <br />
-- [ ] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works) <br/>
+- [x] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works) <br/>
 - [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
 - [ ] special codes (new Expr type) stored in constants that can interact with certain parts of the application (such as the prompt)
 - [ ] fix the error message in [tests/bug1.log](tests/bug1.log)
 - [ ] add debug output to indicate when parsing and evaluation are complete and how long it took (with `--debug` flag)
-- [ ] @undef(ident) builtin to undefine an identifier
-- [ ] somehow fix print{...} printed stuff showing up to the left of the output bars (maybe remove the bars?)
+- [ ] @undef(ident) builtin to undefine a user-defined identifier
+- [x] somehow fix print{...} printed stuff showing up to the left of the output bars (maybe remove the bars?)
 - [x] copy contents of strings need into the Expr.string field, instead of just saving their position
 
 # todos from [maths](https://github.com/ilovapples/maths)

@@ -131,7 +131,8 @@ pub const ParserState = struct {
                     // maybe I should use zig error unions for this kind of thing...
                     std.log.err("unexpected token .{t} ({s}) found after element in vector "
                              ++ "literal (expected .CloseBracket (']') or .Comma (','))", .{
-                        tok.type, tok.type.stringify().?});
+                        tok.type, tok.type.stringify() orelse "you shouldn't ever see this text; please post an issue"
+                    });
 
                     return ParseError.UnterminatedVectorLiteral;
                 }
@@ -141,7 +142,8 @@ pub const ParserState = struct {
         } else if (tok.type == .Pipe) {
             if (self.peekToken().type == .Pipe) {
                 std.log.err("expected expression in pipe block ({s})", .{
-                    token.TokenType.Pipe.stringify().?});
+                    token.TokenType.Pipe.stringify() orelse "you shouldn't ever see this text; please post an issue"
+                });
                 return ParseError.ExpectedExpr;
             }
 

@@ -68,4 +68,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_mod_tests.step);
 
     //libmml.step.dependOn(test_step);
+    //const install_and_test = b.step("test-and-build", "(doesn't work) Run tests and install "
+    //    ++ "(same as `install` and `test` steps combined)");
+    //install_and_test.dependOn(&main.step);
+    //install_and_test.dependOn(&run_mod_tests.step);
 }

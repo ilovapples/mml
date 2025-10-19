@@ -66,7 +66,9 @@ pub const TokenType = enum(u32) {
     Whitespace,
     Eof,
 
-    pub fn stringify(self: @This()) ?[]const u8 {
+    const Self = @This();
+
+    pub fn stringify(self: Self) ?[]const u8 {
         return switch (self) {
             .OpFuncCall => "func_name{args}",
             .OpDot => "'.'",
@@ -118,7 +120,7 @@ pub const TokenType = enum(u32) {
             .Pipe => "'|'",
             .Whitespace => "' '",
             .Eof => "end of the input string/file",
-            else => null,
+            else => "not a valid token",
         };
     }
 };
@@ -515,4 +517,5 @@ test "token.toktype_by_char" {
     try expect(toktype_by_char['\\'] == .Backslash);
     try expect(toktype_by_char['~'] == .OpTilde);
     try expect(toktype_by_char['|'] == .Pipe);
+    try expect(toktype_by_char['&'] == .Amper);
 }

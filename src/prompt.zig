@@ -63,13 +63,12 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
 
         eval_finished.store(true, AtomicOrder.release);
 
-        try tty_writer.writeAll("────────────\n");
         // strings should be quoted when printing from the prompt
         const saved_quote_strings = conf.quote_strings;
         conf.quote_strings = true;
         try val.printValue(conf.*);
         conf.quote_strings = saved_quote_strings;
-        try tty_writer.writeAll("\n────────────\n");
+        try tty_writer.writeByte('\n');
 
         conf.evaluator.?.last_val = val;
     }
