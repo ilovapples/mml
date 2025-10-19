@@ -12,13 +12,14 @@ pub fn initConstants(consts_map: *std.StringHashMap(Expr)) !void {
 }
 
 pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
-    try funcs_maps.builtin_funcs_map.put("dbg", .{.n_args = 1, .func = &builtin__dbg});
-    try funcs_maps.builtin_funcs_map.put("typeof", .{.n_args = 1, .func = &builtin__typeof});
-    try funcs_maps.builtin_funcs_map.put("dbg_ident", .{.n_args = 1, .func = &builtin__dbg_ident});
     try funcs_maps.multiarg_funcs_map.put("print", .{.n_args = 0, .func = &print});
     try funcs_maps.multiarg_funcs_map.put("println", .{.n_args = 0, .func = &println});
     try funcs_maps.multiarg_funcs_map.put("sort", .{.n_args = 1, .func = &sort});
+    try funcs_maps.builtin_funcs_map.put("dbg", .{.n_args = 1, .func = &builtin__dbg});
+    try funcs_maps.builtin_funcs_map.put("typeof", .{.n_args = 1, .func = &builtin__typeof});
+    try funcs_maps.builtin_funcs_map.put("dbg_ident", .{.n_args = 1, .func = &builtin__dbg_ident});
     try funcs_maps.builtin_funcs_map.put("as", .{.n_args = 2, .func = &builtin__as});
+    try funcs_maps.builtin_funcs_map.put("undef", .{.n_args = 1, .func = &builtin__undef});
 }
 
 fn builtin__dbg(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
@@ -114,4 +115,11 @@ fn builtin__as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     }
 
     return Evaluator.EvalError.BadOperation;
+}
+
+fn builtin__undef(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+    if (args[0].* != .identifier) return Evaluator.EvalError.BadFuncCall;
+    const ident = args[0].*.identifier;
+    
+    return Expr.init(state.variables.remove(ident));
 }
