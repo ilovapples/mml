@@ -122,20 +122,6 @@ fn genMultiArgFuncEntry(f: anytype, cf: anytype) Evaluator.MultiArgFuncEntry {
         }.wrapper,
     };
 }
-fn genComplexFunc(cf: anytype) Evaluator.MultiArgFuncEntry {
-    return .{
-        .n_args = 1,
-        .func = struct {
-            pub fn wrapper(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
-                const val = try state.eval(args[0]);
-                if (val == .complex_number) {
-                    return Expr.init(cf(val.complex_number));
-                }
-                return Expr{.invalid={}};
-            }
-        }.wrapper,
-    };
-}
 fn genRealFunc(f: anytype) Evaluator.MultiArgFuncEntry {
     return .{
         .n_args = 1,
@@ -144,6 +130,20 @@ fn genRealFunc(f: anytype) Evaluator.MultiArgFuncEntry {
                 const val = try state.eval(args[0]);
                 if (val == .real_number) {
                     return Expr.init(f(val.real_number));
+                }
+                return Expr{.invalid={}};
+            }
+        }.wrapper,
+    };
+}
+fn genComplexFunc(cf: anytype) Evaluator.MultiArgFuncEntry {
+    return .{
+        .n_args = 1,
+        .func = struct {
+            pub fn wrapper(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+                const val = try state.eval(args[0]);
+                if (val == .complex_number) {
+                    return Expr.init(cf(val.complex_number));
                 }
                 return Expr{.invalid={}};
             }

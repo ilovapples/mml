@@ -15,6 +15,7 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
     try funcs_maps.multiarg_funcs_map.put("print", .{.n_args = 0, .func = &print});
     try funcs_maps.multiarg_funcs_map.put("println", .{.n_args = 0, .func = &println});
     try funcs_maps.multiarg_funcs_map.put("sort", .{.n_args = 1, .func = &sort});
+
     try funcs_maps.builtin_funcs_map.put("dbg", .{.n_args = 1, .func = &builtin__dbg});
     try funcs_maps.builtin_funcs_map.put("typeof", .{.n_args = 1, .func = &builtin__typeof});
     try funcs_maps.builtin_funcs_map.put("dbg_ident", .{.n_args = 1, .func = &builtin__dbg_ident});

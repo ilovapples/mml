@@ -17,6 +17,7 @@
 * [x] can merge prompt branch
     - [x] special codes (new Expr type) stored in constants that can interact with certain parts of the application (such as the prompt) (like `exit` and `clear` and such)
 - [x] add a (zig) function to assert that an Expr is of a certain type and log an error if not
+- [ ] fix the issue in [tests/bug2.log](tests/bug2.log)
 * [ ] documentation related features
     - [ ] partially automated generation of a list of all functions that are implemented (with a command-line option to show it)
     - [ ] copy over syntax guide from [maths](https://github.com/ilovapples/maths) because it's basically the same thing, but update with new stuff (and rewrite the first paragraph, it's practically illegible)
@@ -50,3 +51,4 @@
 - [x] fix prompt so it reads data in 1 byte minimum chunks (now it's 8 bytes for one character read,
       so stdin doesn't work unless you're currently the one using the prompt via shell input or something)
 - [?] add check for recursive variable definition (currently segfaults from stack overflow)
+- [ ] support scientific notation in floating constants
