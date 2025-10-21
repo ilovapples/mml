@@ -2,6 +2,8 @@ const std = @import("std");
 
 const extern_pkg_path: []const u8 = "packages";
 
+const out_name = "mmlz";
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -22,22 +24,26 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // LIBMML LIBRARY (currently empty because it has no C exported functions)
-    const libmml = b.addLibrary(.{
-        .name = "mml",
-        .linkage = .static,
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/root.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
 
-    b.installArtifact(libmml);
+    const libmml_mod = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    // LIBMML LIBRARY (currently empty because it has no C exported functions)
+    //const libmml = b.addLibrary(.{
+    //    .name = "mml",
+    //    .linkage = .static,
+    //    .root_module = libmml_mod,
+    //});
+
+    //installArtifactOptions(b, libmml, .{
+    //    .dest_dir = .{ .override = .{ .custom = "lib/" ++ out_name } },
+    //});
 
     // MML EXECUTABLE
     const main = b.addExecutable(.{
-        .name = "mml_main",
+        .name = out_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
@@ -45,10 +51,10 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    main.linkLibrary(libmml);
+    //main.linkLibrary(libmml);
     main.root_module.addImport(arg_pkg_name, arg_pkg);
     main.root_module.addImport(term_manip_pkg_name, term_manip_pkg);
-    main.root_module.addImport("mml", libmml.root_module);
+    main.root_module.addImport("mml", libmml_mod);
     b.installArtifact(main);
 
     const run_main = b.addRunArtifact(main);
@@ -58,7 +64,7 @@ pub fn build(b: *std.Build) void {
 
 
     const mod_tests = b.addTest(.{
-        .root_module = libmml.root_module,
+        .root_module = libmml_mod,
     });
 
     // A run step that will run the test executable.
@@ -66,10 +72,11 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
+}
 
-    //libmml.step.dependOn(test_step);
-    //const install_and_test = b.step("test-and-build", "(doesn't work) Run tests and install "
-    //    ++ "(same as `install` and `test` steps combined)");
-    //install_and_test.dependOn(&main.step);
-    //install_and_test.dependOn(&run_mod_tests.step);
+fn installArtifactOptions(
+    b: *std.Build,
+    artifact: *std.Build.Step.Compile,
+    options: std.Build.Step.InstallArtifact.Options) void {
+    b.getInstallStep().dependOn(&b.addInstallArtifact(artifact, options).step);
 }

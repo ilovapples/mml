@@ -49,7 +49,7 @@ pub fn main() !void {
     var arg_parser = try ArgParser.parse(allocator, args);
     defer arg_parser.deinit();
 
-    const expr_str = arg_parser.option([]const u8, "expr", "the expression to evaluate") orelse "(3+9^2) * 15";
+    const expr_str = arg_parser.option([]const u8, "expr", "the expression to evaluate");
     
     // config
     var conf: Config = .{
@@ -81,12 +81,14 @@ pub fn main() !void {
 
     conf.evaluator = &eval;
 
-    if (start_repl) {
+    if (start_repl or expr_str == null) {
         defer _ = term_manip.restoreTerminal(&stdin_reader.file);
-        std.debug.assert(&conf == &conf);
+
         const res = try prompt.runPrompt(&stdin_reader, &conf);
+
         try stdout_w.writeAll("\x1b[0 q\x1b[?25h");
         try stdout_w.flush();
+
         if (res != 0) std.process.exit(1)
             else return;
     }
@@ -99,8 +101,8 @@ pub fn main() !void {
     }
 
     // parsing & evaluating
-    const exprs = parse.parseStatements(expr_str, allocator) catch {
-        std.log.err("failed to parse expressions from source: '{s}'\n", .{expr_str});
+    const exprs = parse.parseStatements(expr_str.?, allocator) catch {
+        std.log.err("failed to parse expressions from source: '{s}'\n", .{expr_str.?});
         return;
     };
 
