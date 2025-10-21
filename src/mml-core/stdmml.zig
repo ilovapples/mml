@@ -17,6 +17,7 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
     try funcs_maps.multiarg_funcs_map.put("sort", .{.n_args = 1, .func = &sort});
 
     try funcs_maps.builtin_funcs_map.put("dbg", .{.n_args = 1, .func = &builtin__dbg});
+    try funcs_maps.builtin_funcs_map.put("dbg_str", .{.n_args = 1, .func = &builtin__dbg_str});
     try funcs_maps.builtin_funcs_map.put("typeof", .{.n_args = 1, .func = &builtin__typeof});
     try funcs_maps.builtin_funcs_map.put("dbg_ident", .{.n_args = 1, .func = &builtin__dbg_ident});
     try funcs_maps.builtin_funcs_map.put("as", .{.n_args = 2, .func = &builtin__as});
@@ -26,6 +27,11 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
 fn builtin__dbg(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     args[0].print(state.config.?.*);
     return Expr.init({});
+}
+fn builtin__dbg_str(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+    return Expr{
+        .string = try std.fmt.allocPrint(state.allocator, "{f}", .{std.fmt.alt(args[0].*, .printFmt)})
+    };
 }
 fn builtin__typeof(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     const val = try state.eval(args[0]);

@@ -167,11 +167,15 @@ fn applyFunc(self: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
         return try func.func(self, args);
     }
 
-    const first_arg = try self.eval(args[0]);
+    if (args.len > 0) {
+        const first_arg = try self.eval(args[0]);
 
-    std.log.err("undefined function `{s}` for `{t}` type argument in function call", .{
-        func_name, first_arg,
-    });
+        std.log.err("undefined function `{s}` for `{t}` type argument in function call", .{
+            func_name, first_arg,
+        });
+    } else {
+        std.log.err("undefined function `{s}` for function call without zero arguments", .{func_name});
+    }
     return EvalError.BadFuncCall;
 }
 

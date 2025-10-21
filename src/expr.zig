@@ -96,7 +96,10 @@ pub const Expr = union(enum) {
         w.flush() catch return;
     }
     pub fn print(self: *const Self, config: config_mod.Config) void {
-        Expr.printRecurse(self, config, 0);
+       self.printRecurse(config, 0);
+    }
+    pub fn printFmt(self: Self, w: *std.Io.Writer) !void {
+        self.printRecurse(.{.writer = w}, 0);
     }
 
     pub fn printValue(self: Self, config: config_mod.Config) Evaluator.EvalError!void {

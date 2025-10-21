@@ -117,16 +117,20 @@ fn readLineRaw(reader: *std.fs.File.Reader, stdout: *Io.Writer, out: []u8, promp
         const seq_is_empty = seq_pos == 0;
         const second_char_is_correct = 
             (seq_pos == 1 and c == '[') or
-            (seq_pos > 1 and seq[1] == '[');
+            (seq_pos > 1 and seq[1] == '[') or
+            (seq_pos == 1 and isBorF(c));
         const is_esc_seq_char = (seq_is_empty and c == 0x1b) or second_char_is_correct;
         if (is_esc_seq_char) {
             seq[seq_pos] = c;
             seq_pos += 1;
 
+            // seq[seq_pos-1] = c, c is not yet reset
+            const is_extra_short_seq = seq_pos == 2 and isBorF(c);
             const is_short_seq = seq_pos == 3 and isABCD(c);
             const is_medium_seq = seq_pos == 4 and seq[2] == '3';
             const is_long_seq = seq_pos == 6 and seq[2] == '1';
-            if ((is_short_seq or is_medium_seq or is_long_seq) and seq[0] == 0x1b and seq[1] == '[') {
+            const is_good_len = (is_extra_short_seq or is_short_seq or is_medium_seq or is_long_seq);
+            if (is_good_len and seq[0] == 0x1b and (seq[1] == '[' or is_extra_short_seq)) {
                 _ = handleEscapeSequence(seq[0..seq_pos], out.ptr, &line_len, &cursor);
                 seq_pos = 0;
                 try drawLine(stdout, out[0..line_len], cursor, prompt_str);
@@ -156,6 +160,9 @@ fn readLineRaw(reader: *std.fs.File.Reader, stdout: *Io.Writer, out: []u8, promp
 fn isABCD(c: u8) bool {
     return c >= 'A' and c <= 'D';
 }
+fn isBorF(c: u8) bool {
+    return c == 'b' or c == 'f';
+}
 fn drawLine(stdout: *Io.Writer, line: []const u8, cursor_pos: usize, prompt_str: []const u8) !void {
     try stdout.writeAll("\r\x1b[0K");
     try stdout.writeAll(prompt_str);
@@ -171,17 +178,19 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
     const START_ANSI = "\x1b[";
     const CTRL_ANSI = "\x1b[1;5";
     const ALT_ANSI = "\x1b[1;3";
+    const ALT_LEFT = "\x1bb";
+    const ALT_RIGHT = "\x1bf";
 
     if (std.mem.eql(u8, seq, START_ANSI ++ LEFT_C)) { // if LEFT
         if (cursor.* > 0) cursor.* -= 1; // go left
     } else if (std.mem.eql(u8, seq, START_ANSI ++ RIGHT_C)) { // if RIGHT
         if (cursor.* < line_len.*) cursor.* += 1; // go right
-    } else if (std.mem.eql(u8, seq, START_ANSI ++ UP_C) // if UP
-            or std.mem.eql(u8, seq, ALT_ANSI ++ LEFT_C) // or ALT+LEFT
+    } else if (std.mem.eql(u8, seq, ALT_LEFT) // if ALT+LEFT
+            or std.mem.eql(u8, seq, ALT_ANSI ++ LEFT_C) // or ALT+LEFT (other test)
             or std.mem.eql(u8, seq, CTRL_ANSI ++ LEFT_C)) { // or CTRL+LEFT
         cursor.* = 0; // go all the way left
-    } else if (std.mem.eql(u8, seq, START_ANSI ++ DOWN_C) // if DOWN
-            or std.mem.eql(u8, seq, ALT_ANSI ++ RIGHT_C) // or ALT+RIGHT
+    } else if (std.mem.eql(u8, seq, ALT_RIGHT) // if ALT+RIGHT
+            or std.mem.eql(u8, seq, ALT_ANSI ++ RIGHT_C) // or ALT+RIGHT (other test)
             or std.mem.eql(u8, seq, CTRL_ANSI ++ RIGHT_C)) { // or CTRL+RIGHT
         cursor.* = if (line_len.* == 0) 0 else line_len.* - 1; // go all the way right
     } else if (std.mem.eql(u8, seq, START_ANSI ++ "3~")) { // if DEL
@@ -192,8 +201,15 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
             line_len.* -= 1;
             cursor.* = line_len.*;
         } else return false;
+    } else if (std.mem.eql(u8, seq, START_ANSI ++ UP_C)) { // if UP
+        return false;
+        // return true
+        // do the history thing
+    } else if (std.mem.eql(u8, seq, START_ANSI ++ DOWN_C)) { // if DOWN
+        return false;
+        // return true;
+        // do the history thing but opposite of the above thing
     } else return false;
-    
 
     return true;
 }

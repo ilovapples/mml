@@ -9,7 +9,7 @@
 - [ ] also functions at some point would be good, but they're not a priority
 - [x] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works)
 - [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
-- [x] fix the error message in [tests/bug1.log](tests/bug1.log)
+- [x] fix the error message in ~~[tests/bug1.log](tests/bug1.log)~~
 - [x] add debug output to indicate when parsing and evaluation are complete and how long it took (with `--debug` flag)
 - [x] @undef(ident) builtin to undefine a user-defined identifier
 - [x] somehow fix print{...} printed stuff showing up to the left of the output bars (maybe remove the bars?)
@@ -17,15 +17,15 @@
 * [x] can merge prompt branch
     - [x] special codes (new Expr type) stored in constants that can interact with certain parts of the application (such as the prompt) (like `exit` and `clear` and such)
 - [x] add a (zig) function to assert that an Expr is of a certain type and log an error if not
-- [ ] fix the issue in [tests/bug2.log](tests/bug2.log)
+- [x] fix the issue in ~~[tests/bug2.log](tests/bug2.log)~~
 * [ ] documentation related features
     - [ ] partially automated generation of a list of all functions that are implemented (with a command-line option to show it)
-    - [ ] copy over syntax guide from [maths](https://github.com/ilovapples/maths) because it's basically the same thing, but update with new stuff (and rewrite the first paragraph, it's practically illegible)
+    - [x] copy over syntax guide from [maths](https://github.com/ilovapples/maths) because it's basically the same thing, but update with new stuff (and rewrite the first paragraph, it's practically illegible)
 * [ ] other features for prompt/REPL
     - [ ] autocompletion/suggestions
     - [ ] history (like up and down arrow on a shell)
 * [ ] other features (misc.)
-    - [ ] some way to put the output of `@dbg{expr}` into a `string` from `MML`.
+    - [x] some way to put the output of `@dbg{expr}` into a `string` from MML.
     
 
 
