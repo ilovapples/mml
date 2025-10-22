@@ -28,6 +28,7 @@ pub const Expr = union(enum) {
     pub const Code = enum(usize) {
         Exit,
         ClearScreen,
+        Help,
     };
 
     const Self = @This();

@@ -30,6 +30,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const mml_core_mod = b.createModule(.{
+        .root_source_file = b.path("src/mml-core/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libmml_mod.addImport("mml-core", mml_core_mod);
+    mml_core_mod.addImport("mml", libmml_mod);
     // LIBMML LIBRARY (currently empty because it has no C exported functions)
     //const libmml = b.addLibrary(.{
     //    .name = "mml",
@@ -55,6 +62,7 @@ pub fn build(b: *std.Build) void {
     main.root_module.addImport(arg_pkg_name, arg_pkg);
     main.root_module.addImport(term_manip_pkg_name, term_manip_pkg);
     main.root_module.addImport("mml", libmml_mod);
+    main.root_module.addImport("mml-core", mml_core_mod);
     b.installArtifact(main);
 
     const run_main = b.addRunArtifact(main);

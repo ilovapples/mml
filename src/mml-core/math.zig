@@ -2,9 +2,10 @@ const std = @import("std");
 const complex = std.math.complex;
 const Complex = complex.Complex;
 
-const exprs = @import("../expr.zig");
-const Expr = exprs.Expr;
-const Evaluator = @import("../Evaluator.zig");
+const mml = @import("mml");
+const expr = mml.expr;
+const Expr = expr.Expr;
+const Evaluator = mml.Evaluator;
 
 pub fn initConstants(consts_map: *std.StringHashMap(Expr)) !void {
     try consts_map.put("pi", Expr.init(std.math.pi));

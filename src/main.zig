@@ -11,6 +11,8 @@ const Expr = mml.expr.Expr;
 const parse = mml.parse;
 const Evaluator = mml.Evaluator;
 
+const core = @import("mml-core");
+
 const term_manip = @import("term_manip");
 const prompt = @import("prompt.zig");
 
@@ -68,7 +70,10 @@ pub fn main() !void {
     conf.quote_strings = arg_parser.option(bool,
         "quote-strings", "if set, strings print surrounded by double quotes") orelse false;
 
+    const mml_consts_opt = arg_parser.option(bool, "mml-consts", "display list of provided constants in MML") orelse false;
+    const mml_funcs_opt = arg_parser.option(bool, "mml-funcs", "display list of provided functions in MML") orelse false;
     const print_usage = arg_parser.option(bool, "help", "display usage information") orelse false;
+
     if (print_usage) {
         arg_parser.printUsage(stdout_w);
         try stdout_w.flush();
@@ -80,6 +85,17 @@ pub fn main() !void {
     defer eval.deinit();
 
     conf.evaluator = &eval;
+
+    if (mml_consts_opt) {
+        eval.printConstantsList(stdout_w);
+        try stdout_w.flush();
+        return;
+    }
+    if (mml_funcs_opt) {
+        eval.printFuncsList(stdout_w);
+        try stdout_w.flush();
+        return;
+    }
 
     if (start_repl or expr_str == null) {
         defer _ = term_manip.restoreTerminal(&stdin_reader.file);

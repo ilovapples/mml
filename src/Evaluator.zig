@@ -1,4 +1,5 @@
 const std = @import("std");
+const Io = std.Io;
 const Complex = std.math.Complex;
 const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
@@ -8,8 +9,7 @@ const Expr = expr.Expr;
 const token = @import("token.zig");
 const config_mod = @import("config.zig");
 
-const math_lib = @import("mml-core/math.zig");
-const stdmml_lib = @import("mml-core/stdmml.zig");
+const core = @import("mml-core");
 
 pub const MultiArgFunc = *const fn(state: *Self, args: []*Expr) EvalError!Expr;
 pub const MultiArgFuncEntry = struct {
@@ -76,9 +76,10 @@ pub const EvalError = error{
     BadFuncCall,
     BadOperation,
     InvalidExpression,
+    BadConfiguration,
 }
 || Allocator.Error;
-fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
+fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
     switch (e.*) {
         .invalid => return EvalError.InvalidExpression,
         .vector,
@@ -90,16 +91,16 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
         .identifier, .builtin_ident => {
             const ident = if (e.* == .identifier) e.identifier else e.builtin_ident;
             if (e.* == .builtin_ident and std.mem.eql(u8, ident, "ans")) {
-                return self.last_val orelse error.NoLastValue;
+                return state.last_val orelse error.NoLastValue;
             }
             if (constants_map.get(ident)) |new_e| {
                 return new_e;
             }
 
             if (e.* != .builtin_ident) {
-                const var_expr = self.variables.get(ident);
+                const var_expr = state.variables.get(ident);
                 if (var_expr) |var_e| {
-                    return self.evalRecurse(var_e);
+                    return state.evalRecurse(var_e);
                 }
             }
 
@@ -121,8 +122,8 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
             std.log.err("recursive dependency found in definition of '{s}'", .{left.?.identifier});
             return EvalError.RecursiveDefinitionError;
         }
-        try self.variables.put(left.?.identifier, right.?);
-        return self.evalRecurse(right.?);
+        try state.variables.put(left.?.identifier, right.?);
+        return state.evalRecurse(right.?);
     } else if (e.operation.op == .OpFuncCall) {
         if (left == null
             or right == null
@@ -130,32 +131,33 @@ fn evalRecurse(self: *Self, e: *const Expr) EvalError!Expr {
             return EvalError.BadFuncCall;
         }
 
-        const right_val_vec = try self.evalRecurse(right.?);
-        return try self.applyFunc(left.?.*, right_val_vec.vector);
+        const right_val_vec = try state.evalRecurse(right.?);
+        return try state.applyFunc(left.?.*, right_val_vec.vector);
     }
 
-    return try self.applyOp(
-        try self.evalRecurse(left.?),
-        if (right) |r| try self.evalRecurse(r) else null,
+    return try state.applyOp(
+        try state.evalRecurse(left.?),
+        if (right) |r| try state.evalRecurse(r) else null,
         e.operation.op); // todo
 }
 
-pub fn eval(self: *Self, e: *const Expr) !Expr {
-    self.last_val = try self.evalRecurse(e);
-    return self.last_val.?;
+pub fn eval(state: *Self, e: *const Expr) !Expr {
+    state.last_val = try state.evalRecurse(e);
+    return state.last_val.?;
 }
 
-fn applyFunc(self: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
+fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
     if (func_ident == .builtin_ident) {
         if (builtin_funcs_map.get(func_ident.builtin_ident)) |func| {
             if (func.n_args > 0 and func.n_args != args.len) {
                 std.log.err("expected {} arguments, got {}; in call to builtin function `@{s}`", .{func.n_args, args.len, func_ident.builtin_ident});
                 return EvalError.WrongArgumentCount;
             }
-            return try func.func(self, args);
+            return try func.func(state, args);
         }
 
         std.log.err("undefined builtin function `@{s}` in function call", .{func_ident.builtin_ident});
+        return EvalError.BadFuncCall;
     }
     const func_name = func_ident.identifier;
 
@@ -164,11 +166,11 @@ fn applyFunc(self: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
             std.log.err("expected {} arguments, got {}; in call to function `{s}`", .{func.n_args, args.len, func_name});
             return EvalError.WrongArgumentCount;
         }
-        return try func.func(self, args);
+        return try func.func(state, args);
     }
 
     if (args.len > 0) {
-        const first_arg = try self.eval(args[0]);
+        const first_arg = try state.eval(args[0]);
 
         std.log.err("undefined function `{s}` for `{t}` type argument in function call", .{
             func_name, first_arg,
@@ -181,7 +183,7 @@ fn applyFunc(self: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
 
 const epsilon = 1e-14;
 
-pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError!Expr {
+pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError!Expr {
     if (lo == null) return EvalError.InvalidExpression;
     const left = lo.?;
 
@@ -198,7 +200,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                 return switch (left) {
                     .boolean, .real_number => Expr.init(-(left.getReal())),
                     .complex_number => Expr.init(left.complex_number.neg()),
-                    .vector => self.applyOp(lo, Expr.init(@as(f64, -1.0)), .OpMul),
+                    .vector => state.applyOp(lo, Expr.init(@as(f64, -1.0)), .OpMul),
                     else => blk: {
                         warnBadOperation(op, left, null);
                         break :blk EvalError.BadOperation;
@@ -212,7 +214,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                     .vector => blk: {
                         var sum: f64 = 0.0;
                         for (left.vector) |e| {
-                            sum += (try self.eval(e)).getComplex().squaredMagnitude();
+                            sum += (try state.eval(e)).getComplex().squaredMagnitude();
                         }
                         const magnitude = @sqrt(sum);
                         break :blk Expr.init(magnitude);
@@ -225,11 +227,11 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             },
             .OpTilde => { // plus-minus operator
                 var vec_expr: Expr = .{
-                    .vector = try self.allocator.alloc(*Expr, 2),
+                    .vector = try state.allocator.alloc(*Expr, 2),
                 };
                 
-                const two_exprs = try self.allocator.alloc(Expr, 2);
-                const negated = try self.applyOp(lo, null, .OpNegate);
+                const two_exprs = try state.allocator.alloc(Expr, 2);
+                const negated = try state.applyOp(lo, null, .OpNegate);
                 two_exprs[0] = left;
                 two_exprs[1] = negated;
 
@@ -312,7 +314,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
     } else if (left == .string and right == .string) {
         return switch (op) {
             .OpAdd => blk: {
-                const str = try self.allocator.alloc(u8, left.string.len + right.string.len);
+                const str = try state.allocator.alloc(u8, left.string.len + right.string.len);
                 @memcpy(str[0..left.string.len], left.string);
                 @memcpy(str[left.string.len..(left.string.len + right.string.len)], right.string);
                 break :blk Expr{.string = str};
@@ -330,7 +332,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             .{ left.string, @intFromFloat(@trunc(right.real_number)) }
         else
             .{ right.string, @intFromFloat(@trunc(left.real_number)) };
-        const str = try self.allocator.alloc(u8, the_str.len * the_multiple);
+        const str = try state.allocator.alloc(u8, the_str.len * the_multiple);
         for (0..the_multiple) |i| {
             @memcpy(str[i*the_str.len..(i+1)*the_str.len], the_str);
         }
@@ -347,7 +349,7 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                 std.log.err("index {} out of range for vector of length {}", .{i, left.vector.len});
                 return EvalError.OutOfBoundsIndex;
             }
-            return self.eval(left.vector[i]);
+            return state.eval(left.vector[i]);
         } else if (left == .string) {
             if (i >= left.string.len) {
                 std.log.err("index {} out of range for string of length {}", .{i, left.string.len});
@@ -361,9 +363,9 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                 // n-dimensional dot product
                 var sum = Complex(f64).init(0.0, 0.0);
                 for (0..left.vector.len) |i| {
-                    sum = sum.add((try self.applyOp(
-                                try self.eval(left.vector[i]),
-                                try self.eval(right.vector[i]),
+                    sum = sum.add((try state.applyOp(
+                                try state.eval(left.vector[i]),
+                                try state.eval(right.vector[i]),
                                 .OpMul)
                             ).getComplex());
                 }
@@ -372,9 +374,9 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
                 else return Expr.init(sum);
             },
             .OpEq => return for (0..left.vector.len) |i| {
-                if (!(try self.applyOp(
-                            try self.eval(left.vector[i]),
-                            try self.eval(right.vector[i]),
+                if (!(try state.applyOp(
+                            try state.eval(left.vector[i]),
+                            try state.eval(right.vector[i]),
                             .OpEq)).boolean) {
                     break Expr.init(false);
                 }
@@ -390,12 +392,12 @@ pub fn applyOp(self: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError
             .OpAdd, .OpSub, .OpMul, .OpDiv => {
                 const source_vec = if (left == .vector) &left.vector else &right.vector;
                 var vec_expr: Expr = .{
-                    .vector = try self.allocator.alloc(*Expr, source_vec.len),
+                    .vector = try state.allocator.alloc(*Expr, source_vec.len),
                 };
-                const n_exprs = try self.allocator.alloc(Expr, source_vec.len);
+                const n_exprs = try state.allocator.alloc(Expr, source_vec.len);
                 for (0..source_vec.len) |i| {
-                    const cur = if (left == .vector) try self.applyOp(try self.eval(left.vector[i]), right, op)
-                                                else try self.applyOp(left, try self.eval(right.vector[i]), op);
+                    const cur = if (left == .vector) try state.applyOp(try state.eval(left.vector[i]), right, op)
+                                                else try state.applyOp(left, try state.eval(right.vector[i]), op);
                     n_exprs[i] = cur;
                     vec_expr.vector[i] = &n_exprs[i];
                 }
@@ -426,7 +428,7 @@ pub fn warnBadFuncArgument(
     got_type_str: []const u8,
 ) void {
     var buffer: [1024]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buffer);
+    var writer = Io.Writer.fixed(&buffer);
     writer.print("in call to function '{s}': argument {} expects one of these types: ", .{func_name, arg_index+1}) catch return;
     for (expected_types) |t| {
         writer.print("'{t}', ", .{t}) catch return;
@@ -457,10 +459,10 @@ test "Evaluator.eval" {
     defer evaluator.deinit();
 }
 
-pub fn findIdent(self: *Self, ident: []const u8) ?Expr {
-    if (std.mem.eql(u8, ident, "ans")) return self.last_val;
+pub fn findIdent(state: *Self, ident: []const u8) ?Expr {
+    if (std.mem.eql(u8, ident, "ans")) return state.last_val;
     if (constants_map.get(ident)) |e| return e;
-    if (self.variables.get(ident)) |e| return e.*;
+    if (state.variables.get(ident)) |e| return e.*;
 
     return null;
 }
@@ -472,8 +474,8 @@ pub fn containsIdentCheck(e: *const Expr, context: struct { []const u8 }) bool {
 fn initializeConstants() !void {
     try constants_map.put("true", Expr.init(true));
     try constants_map.put("false", Expr.init(false));
-    try math_lib.initConstants(&constants_map);
-    try stdmml_lib.initConstants(&constants_map);
+    try core.math.initConstants(&constants_map);
+    try core.stdmml.initConstants(&constants_map);
 }
 
 fn initializeFuncMaps() !void {
@@ -481,6 +483,50 @@ fn initializeFuncMaps() !void {
         .multiarg_funcs_map = &multiarg_funcs_map,
         .builtin_funcs_map = &builtin_funcs_map,
     };
-    try math_lib.initFuncs(funcs_struct);
-    try stdmml_lib.initFuncs(funcs_struct);
+    try core.math.initFuncs(funcs_struct);
+    try core.stdmml.initFuncs(funcs_struct);
+}
+
+pub fn printFuncsList(_: *const Self, w: *Io.Writer) void {
+    w.writeAll("Builtins:\n") catch return;
+    var bit = builtin_funcs_map.iterator();
+    while (bit.next()) |func| {
+        w.print("    @{s}{{", .{func.key_ptr.*}) catch return;
+        for (0..func.value_ptr.n_args) |i| {
+            if (i == func.value_ptr.n_args-1) {
+                w.print("a{}", .{i}) catch return;
+            } else {
+                w.print("a{}, ", .{i}) catch return;
+            }
+        }
+        if (func.value_ptr.n_args == 0) {
+            w.writeAll("...") catch return;
+        }
+        w.writeAll("}\n") catch return;
+    }
+    w.writeAll("Other provided functions:\n") catch return;
+    
+    var oit = multiarg_funcs_map.iterator();
+    while (oit.next()) |func| {
+        w.print("   {s}{{", .{func.key_ptr.*}) catch return;
+        for (0..func.value_ptr.n_args) |i| {
+            if (i == func.value_ptr.n_args-1) {
+                w.print("a{}", .{i}) catch return;
+            } else {
+                w.print("a{}, ", .{i}) catch return;
+            }
+        }
+        if (func.value_ptr.n_args == 0) {
+            w.writeAll("...") catch return;
+        }
+        w.writeAll("}\n") catch return;
+    }
+}
+
+pub fn printConstantsList(_: *const Self, w: *Io.Writer) void {
+    w.writeAll("Constants:\n") catch return;
+    var it = constants_map.iterator();
+    while (it.next()) |constant| {
+        w.print("    {s}\n", .{constant.key_ptr.*}) catch return;
+    }
 }

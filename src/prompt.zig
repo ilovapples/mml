@@ -8,6 +8,8 @@ const Config = mml.config.Config;
 const parse = mml.parse;
 const Evaluator = mml.Evaluator;
 
+const core = @import("mml-core");
+
 const term_manip = @import("term_manip");
 
 pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
@@ -22,7 +24,8 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
 
     try tty_writer.writeAll(
         "MML Interactive Prompt 0.1.0 (zig ver.)\n"
-     ++ "Type 'exit'+Enter or ctrl+d to quit the prompt\n");
+     ++ "Type 'exit' or ctrl+d to quit the prompt\n"
+     ++ "Type 'help' or '@help{}' for help.\n");
 
     try tty_writer.writeAll("\x1b[?25l");
     try term_manip.saveSetTerminalRawMode(&tty_reader.file);
@@ -81,6 +84,10 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
             switch (val.code) {
                 .Exit => break,
                 .ClearScreen => try tty_writer.writeAll("\x1b[1;1f\x1b[2J"),
+                .Help => {
+                    _ = try core.stdmml.builtin__help(conf.evaluator.?, &.{});
+                    try tty_writer.writeByte('\n');
+                },
             }
             continue;
         }

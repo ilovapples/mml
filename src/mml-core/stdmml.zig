@@ -2,13 +2,16 @@ const std = @import("std");
 const complex = std.math.complex;
 const Complex = complex.Complex;
 
-const expr = @import("../expr.zig");
+const mml = @import("mml");
+const expr = mml.expr;
 const Expr = expr.Expr;
-const Evaluator = @import("../Evaluator.zig");
+const Evaluator = mml.Evaluator;
+const EvalError = Evaluator.EvalError;
 
 pub fn initConstants(consts_map: *std.StringHashMap(Expr)) !void {
     try consts_map.put("exit", Expr{ .code = Expr.Code.Exit });
     try consts_map.put("clear", Expr{ .code = Expr.Code.ClearScreen });
+    try consts_map.put("help", Expr{ .code = Expr.Code.Help });
 }
 
 pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
@@ -22,29 +25,30 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
     try funcs_maps.builtin_funcs_map.put("dbg_ident", .{.n_args = 1, .func = &builtin__dbg_ident});
     try funcs_maps.builtin_funcs_map.put("as", .{.n_args = 2, .func = &builtin__as});
     try funcs_maps.builtin_funcs_map.put("undef", .{.n_args = 1, .func = &builtin__undef});
+    try funcs_maps.builtin_funcs_map.put("help", .{.n_args = 0, .func = &builtin__help});
 }
 
-fn builtin__dbg(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn builtin__dbg(state: *Evaluator, args: []*Expr) EvalError!Expr {
     args[0].print(state.config.?.*);
     return Expr.init({});
 }
-fn builtin__dbg_str(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn builtin__dbg_str(state: *Evaluator, args: []*Expr) EvalError!Expr {
     return Expr{
         .string = try std.fmt.allocPrint(state.allocator, "{f}", .{std.fmt.alt(args[0].*, .printFmt)})
     };
 }
-fn builtin__typeof(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn builtin__typeof(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const val = try state.eval(args[0]);
     return Expr{ .string = @tagName(val) };
 }
-fn builtin__dbg_ident(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn builtin__dbg_ident(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const e = state.findIdent(args[0].identifier);
     if (e == null) return Expr{.string = "unknown"};
     e.?.print(state.config.?.*);
 
     return Expr.init({});
 }
-fn print(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn print(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const saved_quote_strings = if (state.config) |conf| conf.quote_strings else false;
     if (state.config) |conf| conf.quote_strings = false;
 
@@ -57,7 +61,7 @@ fn print(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     if (state.config) |conf| conf.quote_strings = saved_quote_strings;
     return Expr.init({});
 }
-fn println(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn println(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const saved_quote_strings = if (state.config) |conf| conf.quote_strings else false;
     if (state.config) |conf| conf.quote_strings = false;
 
@@ -69,10 +73,10 @@ fn println(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     if (state.config) |conf| conf.quote_strings = saved_quote_strings;
     return Expr.init({});
 }
-fn sort(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn sort(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const vec = try state.eval(args[0]);
     if (!vec.expectType(.vector, "sort{v} takes a vector and returns it sorted")) {
-        return Evaluator.EvalError.BadFuncCall;
+        return EvalError.BadFuncCall;
     }
 
     const sorted_vec = Expr{ .vector = try state.allocator.dupe(*Expr, vec.vector) };
@@ -88,11 +92,11 @@ fn exprLessThan(c: struct { *Evaluator }, a: *Expr, b: *Expr) bool {
     return a_v.getReal() < b_v.getReal();
 }
 
-fn builtin__as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn builtin__as(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const bad_call_msg = "@as{t, any} takes a type as a string, and a value ";
 
     const s = args[0].*; // string
-    if (!s.expectType(.string, bad_call_msg)) return Evaluator.EvalError.BadFuncCall;
+    if (!s.expectType(.string, bad_call_msg)) return EvalError.BadFuncCall;
 
     const e = try state.eval(args[1]);
 
@@ -115,12 +119,12 @@ fn builtin__as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
                 Expr.init(c)
             else blk: {
                 std.log.err("{s}", .{bad_call_msg});
-                break :blk Evaluator.EvalError.BadFuncCall;
+                break :blk EvalError.BadFuncCall;
             },
             .integer => Expr.init(@as(f64, @floatFromInt(e.integer))),
             else => blk: {
                 std.log.err("{s}", .{bad_call_msg});
-                break :blk Evaluator.EvalError.BadFuncCall;
+                break :blk EvalError.BadFuncCall;
             },
         };
     } else if (std.mem.eql(u8, s.string, ExprType.String)) { // -> string
@@ -133,13 +137,49 @@ fn builtin__as(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
         return Expr{.string = buffer[0..writer.end]};
     }
 
-    return Evaluator.EvalError.BadOperation;
+    return EvalError.BadOperation;
 }
 
-fn builtin__undef(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
+fn builtin__undef(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const e = args[0].*;
 
-    if (!e.expectType(.identifier, "@undef{ident} takes an identifier")) return Evaluator.EvalError.BadFuncCall;
+    if (!e.expectType(.identifier, "@undef{ident} takes an identifier")) return EvalError.BadFuncCall;
     
     return Expr.init(state.variables.remove(e.identifier));
+}
+
+pub fn builtin__help(state: *Evaluator, args: []*Expr) EvalError!Expr {
+    if (state.config == null) {
+        std.log.err("A config must be provided to the evaluator to use the '@help' builtin.", .{});
+        return EvalError.BadConfiguration;
+    }
+    const w = state.config.?.writer;
+    const HelpArgs = .{
+        .Funcs = "funcs",
+        .Consts = "constants",
+    };
+    const ret = Expr{.nothing = {}};
+    if (args.len == 0) {
+        w.writeAll("Potential arguments to '@help':\n") catch return ret;
+        const fields = @typeInfo(@TypeOf(HelpArgs)).@"struct".fields;
+        inline for (fields, 0..) |f, i| { // print the HelpArgs fields
+            w.print("   \"{s}\"", .{@as([]const u8, f.defaultValue().?)}) catch return ret;
+            if (i < fields.len - 1) w.writeByte('\n') catch return ret;
+        }
+
+        return ret;
+    }
+
+    const arg_1 = args[0].*;
+    if (!arg_1.expectType(.string, "@help{s} takes a string literal")) return EvalError.BadFuncCall;
+    if (std.mem.eql(u8, arg_1.string, HelpArgs.Funcs)) {
+        state.printFuncsList(w);
+    } else if (std.mem.eql(u8, arg_1.string, HelpArgs.Consts)) {
+        state.printConstantsList(w);
+    } else {
+        std.log.err("Invalid '@help' argument '{s}' (try '@help{{}}' to see legal arguments)", .{arg_1.string});
+        return EvalError.BadFuncCall;
+    }
+
+    return ret;
 }

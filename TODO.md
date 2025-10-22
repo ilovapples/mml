@@ -19,7 +19,7 @@
 - [x] add a (zig) function to assert that an Expr is of a certain type and log an error if not
 - [x] fix the issue in ~~[tests/bug2.log](tests/bug2.log)~~
 * [ ] documentation related features
-    - [ ] partially automated generation of a list of all functions that are implemented (with a command-line option to show it)
+    - [x] partially automated generation of a list of all functions that are implemented (with a command-line option to show it)
     - [x] copy over syntax guide from [maths](https://github.com/ilovapples/maths) because it's basically the same thing, but update with new stuff (and rewrite the first paragraph, it's practically illegible)
 * [ ] other features for prompt/REPL
     - [ ] autocompletion/suggestions
@@ -39,7 +39,6 @@
 - [x] syntax guide and other documentation
 - [x] === operator for exact equality (do away with --no-estimate-equality)
 - [x] interactive prompt (like python's IDLE) (pretty much done)
-- [ ] add history to interactive prompt
 - [x] fix 'ans' returning the last value evaluated rather than the output of the last prompt
 - [x] change prompt to use MML_parse_stmts~~_to_ret~~ to maybe fix variables not working past their definition?
 - [x] fix random memory leaks (probably caused by evaluator but I can't figure out the root cause)
