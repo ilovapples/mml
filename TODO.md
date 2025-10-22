@@ -7,6 +7,10 @@
 - [x] change Expr printing functions to catch printing errors themselves because that's annoying
 - [x] make evaluation return a smaller set of errors (i should be catching more of them)
 - [ ] also functions at some point would be good, but they're not a priority
+    - [ ] create function entry struct--either n_params + *const Expr or paramnames: []const []const u8 + *const Expr (probably letter to tell what's a parameter and where to put arguments)
+    - [ ] data structure to hold functions (probably string hashmap to function entries)
+    - [ ] add check in evaluator to detect ASSERT_EQ(FUNC_CALL(ident, args_vec), some_expr) (`k{a,b,...} = expr`) to assign the expression and generate the function entry
+    - [ ] make them callable in `Evaluator.applyFunc` and check for correct number of arguments
 - [x] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works)
 - [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
 - [x] fix the error message in ~~[tests/bug1.log](tests/bug1.log)~~
