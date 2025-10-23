@@ -11,8 +11,10 @@
     - [ ] data structure to hold functions (probably string hashmap to function entries)
     - [ ] add check in evaluator to detect ASSERT_EQ(FUNC_CALL(ident, args_vec), some_expr) (`k{a,b,...} = expr`) to assign the expression and generate the function entry
     - [ ] make them callable in `Evaluator.applyFunc` and check for correct number of arguments
+        - [ ] figure out how to insert parameters (maybe have a global call stack with the scope? might be simpler than anything else)
 - [x] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works)
 - [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
+    - [ ] gonna need a lot of enums (or one big one?)
 - [x] fix the error message in ~~[tests/bug1.log](tests/bug1.log)~~
 - [x] add debug output to indicate when parsing and evaluation are complete and how long it took (with `--debug` flag)
 - [x] @undef(ident) builtin to undefine a user-defined identifier

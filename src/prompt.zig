@@ -12,6 +12,13 @@ const core = @import("mml-core");
 
 const term_manip = @import("term_manip");
 
+const line_max_len = 512;
+
+var history_buffer: [64][]const u8 = undefined;
+var history_used: usize = 0; // may be larger than history_buffer.len; modulo is used to fit it in range
+var history_pos: ?usize = null;
+var history_saved_line: [line_max_len]u8 = undefined;
+
 pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
     const prompt_str = ">> ";
     const tty_writer = conf.writer;
@@ -21,6 +28,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
                  ++ "in order to start the prompt.\n", .{});
         return 1;
     }
+    const eval = conf.evaluator.?;
 
     try tty_writer.writeAll(
         "MML Interactive Prompt 0.1.0 (zig ver.)\n"
@@ -33,7 +41,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         try tty_writer.writeAll(prompt_str);
         try tty_writer.flush();
 
-        var line_buffer: [512]u8 = undefined;
+        var line_buffer: [line_max_len]u8 = undefined;
         const line_len = try readLineRaw(
             tty_reader,
             tty_writer,
@@ -52,9 +60,10 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         // start '...' loop to satisfy the user while the parser is parsing (because it's really slow in some cases)
         _ = try std.Thread.spawn(.{}, dotDotDotThread, .{ tty_writer, &eval_finished });
 
+        // BEGIN LINE PARSING & EVALUATION
         const start_parse_time = std.time.nanoTimestamp();
         // parse line into expressions
-        const exprs = parse.parseStatements(line_buffer[0..line_len.?], conf.evaluator.?.allocator) catch {
+        const exprs = parse.parseStatements(line_buffer[0..line_len.?], eval.allocator) catch {
             eval_finished.store(true, AtomicOrder.release);
             continue;
         };
@@ -69,7 +78,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         // evaluate expressions
         var val: Expr = .{.invalid = {}};
         for (exprs) |e| {
-            val = conf.evaluator.?.eval(e) catch .{.invalid = {}};
+            val = eval.eval(e) catch .{.invalid = {}};
         }
         const end_eval_time = std.time.nanoTimestamp();
         if (conf.debug_output) {
@@ -80,12 +89,13 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
 
         eval_finished.store(true, AtomicOrder.release);
 
+
         if (val == .code) {
             switch (val.code) {
                 .Exit => break,
                 .ClearScreen => try tty_writer.writeAll("\x1b[1;1f\x1b[2J"),
                 .Help => {
-                    _ = try core.stdmml.builtin__help(conf.evaluator.?, &.{});
+                    _ = try core.stdmml.builtin__help(eval, &.{});
                     try tty_writer.writeByte('\n');
                 },
             }
@@ -99,6 +109,18 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         try tty_writer.writeByte('\n');
 
         conf.evaluator.?.last_val = val;
+
+        if (history_used > history_buffer.len) eval.allocator.free(history_buffer[history_used % history_buffer.len]);
+        history_buffer[history_used % history_buffer.len] = try eval.allocator.dupe(u8, line_buffer[0..line_len.?]);
+        history_used += 1;
+        history_pos = null;
+        if (false) {
+        for (history_buffer[0..if (history_used <= history_buffer.len) history_used else history_buffer.len]) |l| {
+            try tty_writer.print("'{s}'\n", .{l});
+        }
+        try tty_writer.print("history_used = {}\n", .{history_used});
+        try tty_writer.print("history_pos = {?}\n", .{history_pos});
+        }
     }
 
     return 0;
@@ -208,14 +230,46 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
             line_len.* -= 1;
             cursor.* = line_len.*;
         } else return false;
-    } else if (std.mem.eql(u8, seq, START_ANSI ++ UP_C)) { // if UP
-        return false;
-        // return true
-        // do the history thing
-    } else if (std.mem.eql(u8, seq, START_ANSI ++ DOWN_C)) { // if DOWN
-        return false;
-        // return true;
-        // do the history thing but opposite of the above thing
+    } else if (std.mem.eql(u8, seq, START_ANSI ++ UP_C)) { // if UP, go back in history
+        if (history_used == 0) return false;
+
+        if (history_pos == null or history_pos.? == 0) {
+            history_pos = history_used-1;
+        } else {
+            history_pos.? -= 1;
+        }
+        const hist_line = history_buffer[history_pos.?];
+        @memcpy(history_saved_line[0..line_len.*], line);
+        @memset(history_saved_line[line_len.*..], 0);
+        @memcpy(line, hist_line);
+        line_len.* = hist_line.len;
+        cursor.* = hist_line.len;
+        if (false) {
+        std.log.debug("\ngoing up", .{});
+        std.log.debug("history_used = {}", .{history_used});
+        std.log.debug("history_pos = {?}", .{history_pos});
+        }
+    } else if (std.mem.eql(u8, seq, START_ANSI ++ DOWN_C)) { // if DOWN, go forward in history
+        if (history_used == 0 or history_pos == null) return false;
+
+        const hist_line: *const []const u8 = blk: {
+            if (history_pos.? == history_used-1) {
+                history_pos = null;
+                break :blk &history_saved_line[0..];
+            } else {
+                history_pos.? += 1;
+                break :blk &history_buffer[history_pos.?];
+            }
+        };
+
+        @memcpy(line, hist_line.*);
+        line_len.* = hist_line.len;
+        cursor.* = hist_line.len;
+        if (false) {
+        std.log.debug("\ngoing down", .{});
+        std.log.debug("history_used = {}", .{history_used});
+        std.log.debug("history_pos = {?}", .{history_pos});
+        }
     } else return false;
 
     return true;
