@@ -1,10 +1,11 @@
 const std = @import("std");
+const Build = std.Build;
 
 const extern_pkg_path: []const u8 = "packages";
 
 const out_name = "mmlz";
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -83,8 +84,8 @@ pub fn build(b: *std.Build) void {
 }
 
 fn installArtifactOptions(
-    b: *std.Build,
-    artifact: *std.Build.Step.Compile,
-    options: std.Build.Step.InstallArtifact.Options) void {
+    b: *Build,
+    artifact: *Build.Step.Compile,
+    options: Build.Step.InstallArtifact.Options) void {
     b.getInstallStep().dependOn(&b.addInstallArtifact(artifact, options).step);
 }

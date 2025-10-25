@@ -147,15 +147,15 @@ fn readLineRaw(reader: *std.fs.File.Reader, stdout: *Io.Writer, out: []u8, promp
         const second_char_is_correct = 
             (seq_pos == 1 and c == '[') or
             (seq_pos > 1 and seq[1] == '[') or
-            (seq_pos == 1 and isBorF(c));
+            (seq_pos == 1 and (c == 'b' or c == 'f'));
         const is_esc_seq_char = (seq_is_empty and c == 0x1b) or second_char_is_correct;
         if (is_esc_seq_char) {
             seq[seq_pos] = c;
             seq_pos += 1;
 
             // seq[seq_pos-1] = c, c is not yet reset
-            const is_extra_short_seq = seq_pos == 2 and isBorF(c);
-            const is_short_seq = seq_pos == 3 and isABCD(c);
+            const is_extra_short_seq = seq_pos == 2 and (c == 'b' or c == 'f');
+            const is_short_seq = seq_pos == 3 and (c >= 'A' and c <= 'D');
             const is_medium_seq = seq_pos == 4 and seq[2] == '3';
             const is_long_seq = seq_pos == 6 and seq[2] == '1';
             const is_good_len = (is_extra_short_seq or is_short_seq or is_medium_seq or is_long_seq);
@@ -186,12 +186,7 @@ fn readLineRaw(reader: *std.fs.File.Reader, stdout: *Io.Writer, out: []u8, promp
 
     return line_len;
 }
-fn isABCD(c: u8) bool {
-    return c >= 'A' and c <= 'D';
-}
-fn isBorF(c: u8) bool {
-    return c == 'b' or c == 'f';
-}
+
 fn drawLine(stdout: *Io.Writer, line: []const u8, cursor_pos: usize, prompt_str: []const u8) !void {
     try stdout.writeAll("\r\x1b[0K");
     try stdout.writeAll(prompt_str);
@@ -199,6 +194,7 @@ fn drawLine(stdout: *Io.Writer, line: []const u8, cursor_pos: usize, prompt_str:
     try stdout.print("\r\x1b[{}C\x1b[?25h", .{prompt_str.len + cursor_pos});
     try stdout.flush();
 }
+
 fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize) bool {
     const UP_C = "A";
     const DOWN_C = "B";
@@ -245,35 +241,17 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
         line_len.* = hist_line.len;
         cursor.* = hist_line.len;
         if (false) {
-        std.log.debug("\ngoing up", .{});
-        std.log.debug("history_used = {}", .{history_used});
-        std.log.debug("history_pos = {?}", .{history_pos});
+        std.debug.print("\ngoing up", .{});
+        std.debug.print("history_used = {}", .{history_used});
+        std.debug.print("history_pos = {?}", .{history_pos});
         }
     } else if (std.mem.eql(u8, seq, START_ANSI ++ DOWN_C)) { // if DOWN, go forward in history
-        if (history_used == 0 or history_pos == null) return false;
-
-        const hist_line: *const []const u8 = blk: {
-            if (history_pos.? == history_used-1) {
-                history_pos = null;
-                break :blk &history_saved_line[0..];
-            } else {
-                history_pos.? += 1;
-                break :blk &history_buffer[history_pos.?];
-            }
-        };
-
-        @memcpy(line, hist_line.*);
-        line_len.* = hist_line.len;
-        cursor.* = hist_line.len;
-        if (false) {
-        std.log.debug("\ngoing down", .{});
-        std.log.debug("history_used = {}", .{history_used});
-        std.log.debug("history_pos = {?}", .{history_pos});
-        }
+        
     } else return false;
 
     return true;
 }
+
 fn deleteChar(line: []u8, cursor: *usize, line_len: *usize) void {
     if (cursor.* == 0) return;
 
@@ -282,6 +260,7 @@ fn deleteChar(line: []u8, cursor: *usize, line_len: *usize) void {
     cursor.* -= 1;
     line_len.* -= 1;
 }
+
 fn insertChar(line: []u8, cursor: *usize, line_len: *usize, c: u8) void {
     if (line_len.* >= line.len - 1) return;
 
@@ -303,7 +282,7 @@ fn dotDotDotThread(w: *Io.Writer, eval_finished: *const std.atomic.Value(bool)) 
         }
         w.writeByte('.') catch {};
         w.flush() catch {};
-        std.Thread.sleep(333*std.time.ns_per_ms);
+        std.Thread.sleep(std.time.ns_per_s / 3);
     }
     w.writeByte('\r') catch {};
 }
