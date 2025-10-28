@@ -24,6 +24,7 @@
     - [x] special codes (new Expr type) stored in constants that can interact with certain parts of the application (such as the prompt) (like `exit` and `clear` and such)
 - [x] add a (zig) function to assert that an Expr is of a certain type and log an error if not
 - [x] fix the issue in ~~[tests/bug2.log](tests/bug2.log)~~
+- [ ] fix out-of-bounds with `@` as the input string.
 * [ ] documentation related features
     - [x] partially automated generation of a list of all functions that are implemented (with a command-line option to show it)
     - [x] copy over syntax guide from [maths](https://github.com/ilovapples/maths) because it's basically the same thing, but update with new stuff (and rewrite the first paragraph, it's practically illegible)
@@ -32,6 +33,7 @@
     - [ ] history (like up and down arrow on a shell)
 * [ ] other features (misc.)
     - [x] some way to put the output of `@dbg{expr}` into a `string` from MML.
+    - [ ] make `{}` a proper operation on `function`-type expressions.
     
 
 
@@ -52,8 +54,9 @@
 - [x] vector literals have regressed; each element is (null) or the first thing that was evaluated (no idea why) (forgot to add a memcpy when transitioning to arena but we're good now)
 - [x] 'Nothing' type to return from stuff like `println` (basically `void`)
 - [x] improve `MML_print_expr` to print the AST in a more similar format to the syntax used with `tests/ast_test.h`
-- [x] ~~add Type type so I can add a `cast{type, val}` function~~ we're just using strings for those (check out `ExprType` in `builtin_as` in `src/mml-core/stdmml.zig`
+- [x] ~~add Type type so I can add a `cast{type, val}` function~~ we're just using strings for those (check out `ExprType` in `builtin_as` in `src/mml-core/stdmml.zig`), might change though
 - [x] fix prompt so it reads data in 1 byte minimum chunks (now it's 8 bytes for one character read,
       so stdin doesn't work unless you're currently the one using the prompt via shell input or something)
 - [?] add check for recursive variable definition (currently segfaults from stack overflow)
 - [ ] support scientific notation in floating constants
+- [ ] support underscore separators in numerical constants

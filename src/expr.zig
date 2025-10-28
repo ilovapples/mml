@@ -5,12 +5,6 @@ const token = @import("token.zig");
 const config_mod = @import("config.zig");
 const Evaluator = @import("Evaluator.zig");
 
-pub const Oper = struct {
-    left: ?*Expr,
-    right: ?*Expr,
-    op: token.TokenType,
-};
-
 pub const Expr = union(enum) {
     invalid: void,
     nothing: void,
@@ -29,6 +23,12 @@ pub const Expr = union(enum) {
         Exit,
         ClearScreen,
         Help,
+    };
+
+    pub const Oper = struct {
+        left: ?*Expr,
+        right: ?*Expr,
+        op: token.TokenType,
     };
 
     const Self = @This();

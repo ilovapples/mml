@@ -29,6 +29,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         return 1;
     }
     const eval = conf.evaluator.?;
+    const alloc = eval.arena.allocator();
 
     try tty_writer.writeAll(
         "MML Interactive Prompt 0.1.0 (zig ver.)\n"
@@ -63,7 +64,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         // BEGIN LINE PARSING & EVALUATION
         const start_parse_time = std.time.nanoTimestamp();
         // parse line into expressions
-        const exprs = parse.parseStatements(line_buffer[0..line_len.?], eval.allocator) catch {
+        const exprs = parse.parseStatements(&eval.arena, line_buffer[0..line_len.?]) catch {
             eval_finished.store(true, AtomicOrder.release);
             continue;
         };
@@ -110,8 +111,8 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
 
         conf.evaluator.?.last_val = val;
 
-        if (history_used > history_buffer.len) eval.allocator.free(history_buffer[history_used % history_buffer.len]);
-        history_buffer[history_used % history_buffer.len] = try eval.allocator.dupe(u8, line_buffer[0..line_len.?]);
+        if (history_used > history_buffer.len) alloc.free(history_buffer[history_used % history_buffer.len]);
+        history_buffer[history_used % history_buffer.len] = try alloc.dupe(u8, line_buffer[0..line_len.?]);
         history_used += 1;
         history_pos = null;
         if (false) {

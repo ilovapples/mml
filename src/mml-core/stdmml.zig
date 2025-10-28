@@ -29,12 +29,12 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
 }
 
 fn builtin__dbg(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    args[0].print(state.config.?.*);
+    args[0].print(state.conf.?.*);
     return Expr.init({});
 }
 fn builtin__dbg_str(state: *Evaluator, args: []*Expr) EvalError!Expr {
     return Expr{
-        .string = try std.fmt.allocPrint(state.allocator, "{f}", .{std.fmt.alt(args[0].*, .printFmt)})
+        .string = try std.fmt.allocPrint(state.arena.allocator(), "{f}", .{std.fmt.alt(args[0].*, .printFmt)})
     };
 }
 fn builtin__typeof(state: *Evaluator, args: []*Expr) EvalError!Expr {
@@ -44,33 +44,33 @@ fn builtin__typeof(state: *Evaluator, args: []*Expr) EvalError!Expr {
 fn builtin__dbg_ident(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const e = state.findIdent(args[0].identifier);
     if (e == null) return Expr{.string = "unknown"};
-    e.?.print(state.config.?.*);
+    e.?.print(state.conf.?.*);
 
     return Expr.init({});
 }
 fn print(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    const saved_quote_strings = if (state.config) |conf| conf.quote_strings else false;
-    if (state.config) |conf| conf.quote_strings = false;
+    const saved_quote_strings = if (state.conf) |conf| conf.quote_strings else false;
+    if (state.conf) |conf| conf.quote_strings = false;
 
     for (args, 0..) |e, i| {
         const v = try state.eval(e);
-        try v.printValue(state.config.?.*);
-        if (i < args.len - 1) state.config.?.writer.writeByte(' ') catch {};
+        try v.printValue(state.conf.?.*);
+        if (i < args.len - 1) state.conf.?.writer.writeByte(' ') catch {};
     }
 
-    if (state.config) |conf| conf.quote_strings = saved_quote_strings;
+    if (state.conf) |conf| conf.quote_strings = saved_quote_strings;
     return Expr.init({});
 }
 fn println(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    const saved_quote_strings = if (state.config) |conf| conf.quote_strings else false;
-    if (state.config) |conf| conf.quote_strings = false;
+    const saved_quote_strings = if (state.conf) |conf| conf.quote_strings else false;
+    if (state.conf) |conf| conf.quote_strings = false;
 
     for (args) |e| {
-        try (try state.eval(e)).printValue(state.config.?.*);
-        state.config.?.writer.writeByte('\n') catch {};
+        try (try state.eval(e)).printValue(state.conf.?.*);
+        state.conf.?.writer.writeByte('\n') catch {};
     }
 
-    if (state.config) |conf| conf.quote_strings = saved_quote_strings;
+    if (state.conf) |conf| conf.quote_strings = saved_quote_strings;
     return Expr.init({});
 }
 fn sort(state: *Evaluator, args: []*Expr) EvalError!Expr {
@@ -79,7 +79,7 @@ fn sort(state: *Evaluator, args: []*Expr) EvalError!Expr {
         return EvalError.BadFuncCall;
     }
 
-    const sorted_vec = Expr{ .vector = try state.allocator.dupe(*Expr, vec.vector) };
+    const sorted_vec = Expr{ .vector = try state.arena.allocator().dupe(*Expr, vec.vector) };
 
     std.sort.heap(*Expr, sorted_vec.vector, .{state}, exprLessThan);
 
@@ -128,9 +128,9 @@ fn builtin__as(state: *Evaluator, args: []*Expr) EvalError!Expr {
             },
         };
     } else if (std.mem.eql(u8, s.string, ExprType.String)) { // -> string
-        const buffer = try state.allocator.alloc(u8, 512);
+        const buffer = try state.arena.allocator().alloc(u8, 512);
         var writer = std.Io.Writer.fixed(buffer);
-        var new_config = state.config.?.*;
+        var new_config = state.conf.?.*;
         new_config.writer = &writer;
         
         e.printValue(new_config) catch return Expr{.string = buffer};
@@ -145,15 +145,15 @@ fn builtin__undef(state: *Evaluator, args: []*Expr) EvalError!Expr {
 
     if (!e.expectType(.identifier, "@undef{ident} takes an identifier")) return EvalError.BadFuncCall;
     
-    return Expr.init(state.variables.remove(e.identifier));
+    return Expr.init(state.variable_map.remove(e.identifier));
 }
 
 pub fn builtin__help(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    if (state.config == null) {
+    if (state.conf == null) {
         std.log.err("A config must be provided to the evaluator to use the '@help' builtin.", .{});
         return EvalError.BadConfiguration;
     }
-    const w = state.config.?.writer;
+    const w = state.conf.?.writer;
     const HelpArgs = .{
         .Funcs = "funcs",
         .Consts = "constants",

@@ -1,8 +1,6 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
-const parse = @import("parse.zig");
-
 pub const TokenType = enum(u32) {
     // operator tokens
     OpFuncCall,
@@ -131,7 +129,7 @@ pub const Token = struct {
 
     const Self = @This();
 
-    pub fn init(string: []const u8, state: ?*const parse.ParserState) Self {
+    pub fn init(string: []const u8, looking_for_int: bool) Self {
         return if (string.len == 0) .{.string = string, .type = .Eof} else switch (string[0]) {
             '.', '^', '+', '-', '*', '/', '%',
             '(', ')', '{', '}', '[', ']', ',', ';',
@@ -167,8 +165,7 @@ pub const Token = struct {
             '0'...'9' => blk: {
                 var index: usize = 0;
                 while (index < string.len and std.ascii.isDigit(string[index])) : (index += 1) {}
-                if (state != null and !state.?.looking_for_int
-                    and index < string.len and string[index] == '.') {
+                if (!looking_for_int and index < string.len and string[index] == '.') {
                     index += 1;
                     while (index < string.len and std.ascii.isDigit(string[index])) : (index += 1) {}
                 }
@@ -224,7 +221,7 @@ pub const Token = struct {
         return @intFromEnum(self.type) < @intFromEnum(TokenType.OpNot);
     }
     pub fn isUnaryOp(self: Self) bool {
-        return self.type == .OpTilde or (self.isOp() and !self.isBinaryOp());
+        return self.isOp() and !self.isBinaryOp();
     }
     pub fn isRightAssocOp(self: Self) bool {
         return self.type == .OpPow or self.isUnaryOp();

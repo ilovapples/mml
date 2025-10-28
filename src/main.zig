@@ -38,11 +38,7 @@ pub fn main() !void {
     // arena & allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
     defer _ = gpa.deinit();
-    const gpa_alloc = gpa.allocator();
-
-    var arena = std.heap.ArenaAllocator.init(gpa_alloc);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+    const allocator = gpa.allocator();
 
     // arguments
     const args = try std.process.argsAlloc(allocator);
@@ -63,12 +59,18 @@ pub fn main() !void {
 
     conf.debug_output = arg_parser.option(bool, "debug", "enable debug output across the program") orelse false;
 
-    conf.bools_print_as_nums = arg_parser.option(bool,
-        "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
-    conf.decimal_precision = arg_parser.option(u32,
-        "precision", "(WARNING: unused) precision to use when displaying decimals") orelse 6;
-    conf.quote_strings = arg_parser.option(bool,
-        "quote-strings", "if set, strings print surrounded by double quotes") orelse false;
+    conf.bools_print_as_nums = arg_parser.option(
+        bool,
+        "bools-are-nums",
+        "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
+    conf.decimal_precision = arg_parser.option(
+        u32,
+        "precision",
+        "(WARNING: unused) precision to use when displaying decimals") orelse 6;
+    conf.quote_strings = arg_parser.option(
+        bool,
+        "quote-strings",
+        "if set, strings print surrounded by double quotes") orelse false;
 
     const mml_consts_opt = arg_parser.option(bool, "mml-consts", "display list of provided constants in MML") orelse false;
     const mml_funcs_opt = arg_parser.option(bool, "mml-funcs", "display list of provided functions in MML") orelse false;
@@ -117,7 +119,7 @@ pub fn main() !void {
     }
 
     // parsing & evaluating
-    const exprs = parse.parseStatements(expr_str.?, allocator) catch {
+    const exprs = parse.parseStatements(&eval.arena, expr_str.?) catch {
         std.log.err("failed to parse expressions from source: '{s}'\n", .{expr_str.?});
         return;
     };

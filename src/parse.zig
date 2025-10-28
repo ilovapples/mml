@@ -1,42 +1,50 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const ArenaAllocator = std.heap.ArenaAllocator;
 const expect = std.testing.expect;
 
 const token = @import("token.zig");
+const Token = token.Token;
+const TokenType = token.TokenType;
 const expr = @import("expr.zig");
 const Expr = expr.Expr;
 
-pub const ParserState = struct {
-    allocator: ?Allocator = null,
+const ParserState = struct {
     string: []const u8,
     cur_pos: usize = 0,
-    current_token: ?token.Token = null,
+    current_token: ?Token = null,
+    peeked_token: ?Token = null,
     looking_for_int: bool = false,
     in_pipe_block: bool = false,
+    arena: *ArenaAllocator,
 
     const Self = @This();
 
-    pub fn init(string: []const u8) Self {
-        return .{ .string = string };
+    pub fn init(arena: *ArenaAllocator, string: []const u8) Self {
+        return .{
+            .string = string,
+            .arena = arena,
+        };
     }
 
-    pub fn peekToken(self: *Self) token.Token {
-        // save a local position so we're not modifying state
-        var local_pos = self.cur_pos;
-
+    pub fn peekToken(self: *Self) Token {
         // skip whitespace
-        while (local_pos < self.string.len and
-            std.ascii.isWhitespace(self.string[local_pos])) : (local_pos += 1)
-        {}
+        const next_char_after_whitespace = std.mem.indexOfNonePos(
+            u8, self.string, self.cur_pos, &std.ascii.whitespace);
 
-        return token.Token.init(self.string[local_pos..], self);
+        self.peeked_token = Token.init(
+            self.string[next_char_after_whitespace orelse self.string.len..],
+            self.looking_for_int);
+        return self.peeked_token.?;
     }
 
-    pub fn nextToken(self: *Self) token.Token {
-        const ret_tok = self.peekToken();
+    pub fn nextToken(self: *Self) Token {
+        const ret_tok = self.peeked_token orelse self.peekToken();
         self.cur_pos = ret_tok.string.ptr + ret_tok.string.len - self.string.ptr;
         self.current_token = ret_tok;
-        //std.log.debug("{f}", .{ret_tok});
+
+        if (self.peeked_token) |_| self.peeked_token = null;
+
         return ret_tok;
     }
 
@@ -46,9 +54,11 @@ pub const ParserState = struct {
         UnterminatedVectorLiteral,
     } || Allocator.Error;
     pub fn parseExprRecurse(self: *Self, max_preced: u8) ParseError!*Expr {
+        const alloc = self.arena.allocator();
+
         var tok = self.nextToken();
-        var left = try self.allocator.?.create(Expr);
-        errdefer self.allocator.?.destroy(left);
+        var left = try alloc.create(Expr);
+        errdefer alloc.destroy(left);
 
         if (tok.type == .OpSub or tok.type == .OpAdd or tok.isUnaryOp()) {
             const new_token_type = switch (tok.type) {
@@ -65,13 +75,13 @@ pub const ParserState = struct {
             });
         } else if (tok.type == .Ident or tok.type == .BuiltinIdent) {
             if (self.peekToken().type == .OpenBrace) { // function call
-                const name_expr = try self.allocator.?.create(Expr);
+                const name_expr = try alloc.create(Expr);
                 if (tok.type == .Ident) {
                     name_expr.* = @unionInit(Expr, "identifier",
-                        try self.allocator.?.dupe(u8, tok.string));
+                        try alloc.dupe(u8, tok.string));
                 } else {
                     name_expr.* = @unionInit(Expr, "builtin_ident", 
-                        try self.allocator.?.dupe(u8, tok.string));
+                        try alloc.dupe(u8, tok.string));
                 }
 
                 left.* = @unionInit(Expr, "operation", .{
@@ -82,49 +92,49 @@ pub const ParserState = struct {
 
                 _ = self.nextToken();
 
-                left.operation.right = try self.allocator.?.create(Expr);
-                var temp_arrlist = try std.ArrayList(*Expr).initCapacity(self.allocator.?, 1);
+                left.operation.right = try alloc.create(Expr);
+                var temp_arrlist = try std.ArrayList(*Expr).initCapacity(alloc, 1);
 
                 while (true) {
                     if (self.peekToken().type == .CloseBrace) {
                         break;
                     }
                     const next_expr = try self.parseExprRecurse(parser_max_preced);
-                    try temp_arrlist.append(self.allocator.?, next_expr);
+                    try temp_arrlist.append(alloc, next_expr);
 
                     if (self.nextToken().type != .Comma) {
                         break;
                     }
                 }
 
-                left.operation.right.?.* = @unionInit(Expr, "vector", try temp_arrlist.toOwnedSlice(self.allocator.?));
+                left.operation.right.?.* = @unionInit(Expr, "vector", try temp_arrlist.toOwnedSlice(alloc));
 
                 if (self.current_token.?.type != .CloseBrace) {
                     _ = self.nextToken();
                 }
             } else {
                 if (tok.type == .Ident) {
-                    left.* = @unionInit(Expr, "identifier", try self.allocator.?.dupe(u8, tok.string));
+                    left.* = @unionInit(Expr, "identifier", try alloc.dupe(u8, tok.string));
                 } else {
-                    left.* = @unionInit(Expr, "builtin_ident", try self.allocator.?.dupe(u8, tok.string));
+                    left.* = @unionInit(Expr, "builtin_ident", try alloc.dupe(u8, tok.string));
                 }
             }
         } else if (tok.type == .OpenParen) { // parentheses
-            self.allocator.?.destroy(left);
+            alloc.destroy(left);
             left = try self.parseExprRecurse(parser_max_preced);
             if (self.nextToken().type != .CloseParen) {
                 _ = self.nextToken();
             }
         } else if (tok.type == .OpenBracket) { // vector literal
-            var temp_arrlist = try std.ArrayList(*Expr).initCapacity(self.allocator.?, 2);
-            errdefer temp_arrlist.deinit(self.allocator.?);
+            var temp_arrlist = try std.ArrayList(*Expr).initCapacity(alloc, 2);
+            errdefer temp_arrlist.deinit(alloc);
             if (self.peekToken().type == .CloseBracket) {
                 left.* = @unionInit(Expr, "vector", &[_]*Expr{});
                 tok = self.nextToken();
             }
             while (tok.type != .CloseBracket) {
                 const e = try self.parseExprRecurse(parser_max_preced);
-                try temp_arrlist.append(self.allocator.?, e);
+                try temp_arrlist.append(alloc, e);
 
                 tok = self.nextToken();
                 if (tok.type != .CloseBracket and tok.type != .Comma) {
@@ -138,18 +148,18 @@ pub const ParserState = struct {
                 }
             }
 
-            left.* = @unionInit(Expr, "vector", try temp_arrlist.toOwnedSlice(self.allocator.?));
+            left.* = @unionInit(Expr, "vector", try temp_arrlist.toOwnedSlice(alloc));
         } else if (tok.type == .Pipe) {
             if (self.peekToken().type == .Pipe) {
                 std.log.err("expected expression in pipe block ({s})", .{
-                    token.TokenType.Pipe.stringify() orelse "you shouldn't ever see this text; please post an issue"
+                    TokenType.Pipe.stringify() orelse "you shouldn't ever see this text; please post an issue"
                 });
                 return ParseError.ExpectedExpr;
             }
 
             self.in_pipe_block = true;
 
-            self.allocator.?.destroy(left);
+            alloc.destroy(left);
             left = try self.parseExprRecurse(parser_max_preced);
 
             if (self.nextToken().type != .Pipe) {
@@ -158,7 +168,7 @@ pub const ParserState = struct {
 
             self.in_pipe_block = false;
 
-            const opnode = try self.allocator.?.create(Expr);
+            const opnode = try alloc.create(Expr);
             opnode.* = @unionInit(Expr, "operation", .{
                 .op = .Pipe,
                 .left = left,
@@ -191,7 +201,7 @@ pub const ParserState = struct {
             self.looking_for_int = false;
         } else if (tok.type == .String) {
             left.* = @unionInit(Expr, "string", 
-                try self.allocator.?.dupe(u8, tok.string[1..tok.string.len-1]));
+                try alloc.dupe(u8, tok.string[1..tok.string.len-1]));
         } else {
             std.log.err("null expression. found token .{t} ({s})", .{
 				tok.type,
@@ -213,7 +223,7 @@ pub const ParserState = struct {
                 },
                 else => true,
             };
-            if (@intFromEnum(op_tok.type) > @intFromEnum(token.TokenType.NotOp)) break;
+            if (@intFromEnum(op_tok.type) > @intFromEnum(TokenType.NotOp)) break;
 
             const preced = operator_precedence[@intFromEnum(op_tok.type)];
             if (preced > max_preced) break;
@@ -230,7 +240,7 @@ pub const ParserState = struct {
                 return ParseError.ExpectedExpr;
             };
 
-            const opnode = try self.allocator.?.create(Expr);
+            const opnode = try alloc.create(Expr);
             opnode.* = @unionInit(Expr, "operation", .{
                 .op = op_tok.type,
                 .left = left,
@@ -244,26 +254,25 @@ pub const ParserState = struct {
     }
 
 };
-pub fn parseExpr(str: []const u8, allocator: Allocator) !*Expr {
-    var state = ParserState.init(str);
-
-    state.allocator = allocator;
+pub fn parseExpr(arena: *ArenaAllocator, str: []const u8) !*Expr {
+    var state = ParserState.init(arena, str);
 
     return try state.parseExprRecurse(parser_max_preced);
 }
 
-pub fn parseStatements(str: []const u8, allocator: Allocator) ![]*Expr {
-    var temp = try std.ArrayList(*Expr).initCapacity(allocator, 1);
-    errdefer temp.deinit(allocator);
+pub fn parseStatements(arena: *ArenaAllocator, str: []const u8) ![]*Expr {
+    const alloc = arena.allocator();
 
-    var state = ParserState.init(str);
-    state.allocator = allocator;
-    try temp.append(allocator, try state.parseExprRecurse(parser_max_preced));
+    var temp = try std.ArrayList(*Expr).initCapacity(alloc, 1);
+    errdefer temp.deinit(alloc);
+
+    var state = ParserState.init(arena, str);
+    try temp.append(alloc, try state.parseExprRecurse(parser_max_preced));
     while (state.nextToken().type == .Semicolon) {
-        try temp.append(allocator, try state.parseExprRecurse(parser_max_preced));
+        try temp.append(alloc, try state.parseExprRecurse(parser_max_preced));
     }
 
-    return try temp.toOwnedSlice(allocator);
+    return try temp.toOwnedSlice(alloc);
 }
 
 test "parser.ParserState.peekToken" {
@@ -275,7 +284,7 @@ test "parser.ParserState.peekToken" {
 test "parser.ParserState.nextToken" {
     var state = ParserState.init("print{cos{31.9} * pi^7}");
 
-    const expected = [_]token.Token{
+    const expected = [_]Token{
         .{ .string = "print", .type = .Ident },
         .{ .string = "{", .type = .OpenBrace },
         .{ .string = "cos", .type = .Ident },
