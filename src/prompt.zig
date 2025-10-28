@@ -36,7 +36,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
      ++ "Type 'help' or '@help{}' for help.\n");
 
     try tty_writer.writeAll("\x1b[?25l");
-    try term_manip.saveSetTerminalRawMode(&tty_reader.file);
+    term_manip.saveSetTerminalRawMode(&tty_reader.file) catch |e| if (e != error.NotATerminal) return e;
     while (true) {
         try tty_writer.writeAll(prompt_str);
         try tty_writer.flush();
@@ -141,7 +141,7 @@ fn readLineRaw(reader: *std.fs.File.Reader, stdout: *Io.Writer, out: []u8, promp
     const r = &reader.interface;
 
     while (line_len >= cursor and line_len < out.len) {
-        const c = try r.takeByte();
+        const c = r.takeByte() catch return null;
 
         const seq_is_empty = seq_pos == 0;
         const second_char_is_correct = 
