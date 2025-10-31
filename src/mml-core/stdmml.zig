@@ -34,7 +34,7 @@ fn builtin__dbg(state: *Evaluator, args: []*Expr) EvalError!Expr {
 }
 fn builtin__dbg_str(state: *Evaluator, args: []*Expr) EvalError!Expr {
     return Expr{
-        .string = try std.fmt.allocPrint(state.arena.allocator(), "{f}", .{std.fmt.alt(args[0].*, .printFmt)})
+        .string = try std.fmt.allocPrint(state.arena_alloc, "{f}", .{std.fmt.alt(args[0].*, .printFmt)})
     };
 }
 fn builtin__typeof(state: *Evaluator, args: []*Expr) EvalError!Expr {
@@ -79,7 +79,7 @@ fn sort(state: *Evaluator, args: []*Expr) EvalError!Expr {
         return EvalError.BadFuncCall;
     }
 
-    const sorted_vec = Expr{ .vector = try state.arena.allocator().dupe(*Expr, vec.vector) };
+    const sorted_vec = Expr{ .vector = try state.arena_alloc.dupe(*Expr, vec.vector) };
 
     std.sort.heap(*Expr, sorted_vec.vector, .{state}, exprLessThan);
 
@@ -128,7 +128,7 @@ fn builtin__as(state: *Evaluator, args: []*Expr) EvalError!Expr {
             },
         };
     } else if (std.mem.eql(u8, s.string, ExprType.String)) { // -> string
-        const buffer = try state.arena.allocator().alloc(u8, 512);
+        const buffer = try state.arena_alloc.alloc(u8, 512);
         var writer = std.Io.Writer.fixed(buffer);
         var new_config = state.conf.?.*;
         new_config.writer = &writer;

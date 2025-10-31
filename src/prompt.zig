@@ -29,7 +29,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         return 1;
     }
     const eval = conf.evaluator.?;
-    const alloc = eval.arena.allocator();
+    const alloc = eval.arena_alloc;
 
     try tty_writer.writeAll(
         "MML Interactive Prompt 0.1.0 (zig ver.)\n"
@@ -64,7 +64,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         // BEGIN LINE PARSING & EVALUATION
         const start_parse_time = std.time.nanoTimestamp();
         // parse line into expressions
-        const exprs = parse.parseStatements(&eval.arena, line_buffer[0..line_len.?]) catch {
+        const exprs = parse.parseStatements(@ptrCast(@alignCast(eval.arena_alloc.ptr)), line_buffer[0..line_len.?]) catch {
             eval_finished.store(true, AtomicOrder.release);
             continue;
         };
@@ -123,6 +123,9 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         try tty_writer.print("history_pos = {?}\n", .{history_pos});
         }
     }
+        for (history_buffer[0..if (history_used <= history_buffer.len) history_used else history_buffer.len]) |l| {
+            alloc.free(l);
+        }
 
     return 0;
 }
@@ -236,8 +239,8 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
             history_pos.? -= 1;
         }
         const hist_line = history_buffer[history_pos.?];
-        @memcpy(history_saved_line[0..line_len.*], line);
-        @memset(history_saved_line[line_len.*..], 0);
+        //@memcpy(history_saved_line[0..line_len.*], line);
+        //@memset(history_saved_line[line_len.*..], 0);
         @memcpy(line, hist_line);
         line_len.* = hist_line.len;
         cursor.* = hist_line.len;

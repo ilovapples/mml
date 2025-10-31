@@ -40,6 +40,9 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
     // arguments
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
@@ -83,7 +86,7 @@ pub fn main() !void {
     }
 
     // evaluator
-    var eval = try Evaluator.init(allocator, &conf);
+    var eval = try Evaluator.init(&arena, &conf);
     defer eval.deinit();
 
     conf.evaluator = &eval;
@@ -119,7 +122,7 @@ pub fn main() !void {
     }
 
     // parsing & evaluating
-    const exprs = parse.parseStatements(&eval.arena, expr_str.?) catch {
+    const exprs = parse.parseStatements(&arena, expr_str.?) catch {
         std.log.err("failed to parse expressions from source: '{s}'\n", .{expr_str.?});
         return;
     };

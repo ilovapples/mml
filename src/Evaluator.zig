@@ -15,7 +15,7 @@ const core = @import("mml-core");
 conf: ?*Config = null,
 variable_map: std.StringHashMap(*Expr),
 last_val: ?Expr = null,
-arena: ArenaAllocator,
+arena_alloc: Allocator,
 
 var n_initialized: std.atomic.Value(u64) = .init(0);
 var constants_map: std.StringHashMap(Expr) = undefined;
@@ -37,7 +37,8 @@ const Self = @This();
 
 /// Initialize an Evaluator (along with other global state that needs to be initialized).
 /// Uses an ArenaAllocator with child allocator `alloc` under the hood.
-pub fn init(alloc: Allocator, conf: *Config) !Self {
+pub fn init(arena: *ArenaAllocator, conf: *Config) !Self {
+    const alloc = arena.allocator();
     const n_initialized_val = n_initialized.load(.acquire);
     if (n_initialized_val == 0) {
         constants_map = .init(alloc);
@@ -47,11 +48,10 @@ pub fn init(alloc: Allocator, conf: *Config) !Self {
         try initBuiltins();
     }
     n_initialized.store(n_initialized_val + 1, .release);
-    var arena = ArenaAllocator.init(alloc);
     return .{
         .conf = conf,
-        .variable_map = .init(arena.allocator()),
-        .arena = arena,
+        .variable_map = .init(alloc),
+        .arena_alloc = alloc,
     };
 }
 
@@ -65,7 +65,6 @@ pub fn deinit(self: *Self) void {
         builtin_funcs_map.deinit();
     }
     n_initialized.store(n_initialized_val - 1, .release);
-    self.arena.deinit();
 }
 
 pub const EvalError = error{
@@ -185,7 +184,6 @@ fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
 const epsilon = 1e-14;
 
 pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError!Expr {
-    const alloc = state.arena.allocator();
     if (lo == null) return EvalError.InvalidExpression;
     const left = lo.?;
 
@@ -229,10 +227,10 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
             },
             .OpTilde => { // plus-minus operator
                 var vec_expr: Expr = .{
-                    .vector = try alloc.alloc(*Expr, 2),
+                    .vector = try state.arena_alloc.alloc(*Expr, 2),
                 };
                 
-                const two_exprs = try alloc.alloc(Expr, 2);
+                const two_exprs = try state.arena_alloc.alloc(Expr, 2);
                 const negated = try state.applyOp(lo, null, .OpNegate);
                 two_exprs[0] = left;
                 two_exprs[1] = negated;
@@ -316,7 +314,7 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
     } else if (left == .string and right == .string) {
         return switch (op) {
             .OpAdd => blk: {
-                const str = try alloc.alloc(u8, left.string.len + right.string.len);
+                const str = try state.arena_alloc.alloc(u8, left.string.len + right.string.len);
                 @memcpy(str[0..left.string.len], left.string);
                 @memcpy(str[left.string.len..(left.string.len + right.string.len)], right.string);
                 break :blk Expr{.string = str};
@@ -334,7 +332,7 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
             .{ left.string, @intFromFloat(@trunc(right.real_number)) }
         else
             .{ right.string, @intFromFloat(@trunc(left.real_number)) };
-        const str = try alloc.alloc(u8, the_str.len * the_multiple);
+        const str = try state.arena_alloc.alloc(u8, the_str.len * the_multiple);
         for (0..the_multiple) |i| {
             @memcpy(str[i*the_str.len..(i+1)*the_str.len], the_str);
         }
@@ -394,9 +392,9 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
             .OpAdd, .OpSub, .OpMul, .OpDiv => {
                 const source_vec = if (left == .vector) &left.vector else &right.vector;
                 var vec_expr: Expr = .{
-                    .vector = try alloc.alloc(*Expr, source_vec.len),
+                    .vector = try state.arena_alloc.alloc(*Expr, source_vec.len),
                 };
-                const n_exprs = try alloc.alloc(Expr, source_vec.len);
+                const n_exprs = try state.arena_alloc.alloc(Expr, source_vec.len);
                 for (0..source_vec.len) |i| {
                     const cur = if (left == .vector) try state.applyOp(try state.eval(left.vector[i]), right, op)
                                                 else try state.applyOp(left, try state.eval(right.vector[i]), op);
