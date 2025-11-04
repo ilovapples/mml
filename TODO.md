@@ -34,6 +34,8 @@
 * [ ] other features (misc.)
     - [x] some way to put the output of `@dbg{expr}` into a `string` from MML.
     - [ ] make `{}` a proper operation on `function`-type expressions.
+- [ ] make argument parser read arguments as they're requested. will help it know how to deal with stuff like '-h 9', where '-h' is a bool option and 9 shouldn't be considered its value, but is. it's impossible for it to know how to deal with it right now.
+- [ ] fix bug in [tests/bug3.log](tests/bug3.log)
     
 
 

@@ -11,7 +11,7 @@ MML is a sort of mathematical scripting language with support for several mathem
 
 There a sort of 'concept' (hence the heading) that needs to be cleared up. In MML, when an expression is assigned to a variable, like `x = 9 + 3`, it is _literally_ assigned to the variable. This is distinct from the behavior of most _programming_
 languages, which would in this situation evaluate the expression and assign the _value_ to the variable, not the expression itself. This decision was made 1. because I didn't have a great plan going into this project, and 2. because I think this 
-behavior better reflects what would observed in an algebraic system. This interesting design allows for things like the following to be allowed (using python highlighting because it's probably easier to read):
+behavior better reflects what would observed in an algebraic system. This interesting design allows for things like the following to be allowed (using python highlighting because it might be easier to read):
 ```python
 C = (F - 32) * 5/9
 F = 80
@@ -20,7 +20,7 @@ C === 26 + 2/3
 Notice that `F` wasn't defined before the second line `F = 80`, and yet `C` was well defined by its definition regardless of being dependent on the value of `F`. This also means that, when `F` is changed and `C` is reevaluated, it will reflect
 the new value of `F`, almost as if `C` were a function `C{F}` (functions in this form are planned, but work has not begun just yet).
 
-A variable/expression is 'evaluated' when it is used anywhere other than a variable definition or in a vector literal (see [Advanced Syntax](#advanced-syntax) for more on vectors). The interactive prompt (accessed via `-I` or `--interactive` from
+A variable/expression is 'evaluated' when it is used anywhere other than a variable definition or in a vector literal (see [Advanced Syntax](#advanced-syntax) for more on vectors). The interactive prompt (accessed via ~~`-I` or `--interactive`~~ `-R` or `--repl` from
 the executable) automatically evaluates the last expression in each input line, but nothing is automatically evaluated if using the pure library (or the `--expr=` and `--no-eval` options combined, which specify an expression to parse but not
 evaluate).
 
@@ -68,6 +68,8 @@ For more specifics on the semantics of variable assignment, see [Concepts](#conc
 
 MML allows you to implicitly multiply two distinct values in certain circumstances by placing them next to each other.
 Example: `5pi == 5*pi` <br />
+
+The `|x|` notation is supported for absolute value and computing vector magnitude, though it can't be nested (ex. `||x+2|/9|` would cause a not-very-descriptive syntax error)
 
 MML supports complex numbers as well. A complex number can be defined as: `z = 5 + 3i`, where `i` is a built-in constant (see [Built-ins](#built-ins) for other built-in constants) that is multiplied by the number `3` and added to `5`. This was not made possible via any special syntax---really, under the hood, MML just promotes a number to a complex number if it used in an expression with a complex number, so all the example really does is promote `3` to the complex number `3+0i`, multiply it by `i` to create `0+3i`, and add `5` to make `5+3i`, which is assigned to `z` (sort of).
 

@@ -1,5 +1,6 @@
 const std = @import("std");
 const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
 pub const TokenType = enum(u32) {
     // operator tokens
@@ -20,10 +21,11 @@ pub const TokenType = enum(u32) {
 
     OpAssertEqual,
 
-    OpNot, // this is boolean not
+    OpNot,
     OpNegate,
     OpUnaryNothing,
     OpTilde,
+    // marker token for the end of the operators (used in isOp() and friends)
     NotOp,
 
     // non-operator tokens
@@ -46,26 +48,39 @@ pub const TokenType = enum(u32) {
     CloseBracket,
 
     Dquote,
-    Squote,
-    Backtick,
+    //Squote,
 
-    Colon,
     Semicolon,
     Comma,
 
-    Hashtag,
-    Question,
-    Backslash,
-    Dollar,
-    Amper,
     Pipe,
 
     Invalid,
+    InvalidCharacter,
     Whitespace,
     Eof,
 
     const Self = @This();
 
+    /// return whether the token type is an operator
+    pub fn isOp(self: TokenType) bool {
+        return @intFromEnum(self) < @intFromEnum(TokenType.NotOp);
+    }
+    /// return whether the token type is an operator that takes two operands
+    pub fn isBinaryOp(self: TokenType) bool {
+        return @intFromEnum(self) < @intFromEnum(TokenType.OpNot);
+    }
+    /// return whether the token type is an operator that takes one operand
+    pub fn isUnaryOp(self: TokenType) bool {
+        return self.isOp() and !self.isBinaryOp();
+    }
+    /// return whether the token type is an operator and the parser should evaluate it right-associatively
+    pub fn isRightAssocOp(self: TokenType) bool {
+        return self == .OpPow or self.isUnaryOp();
+    }
+
+    /// return a string-ified version of the token type for user-side output.
+    /// return type is ?[]const u8 because it might return null in the future.
     pub fn stringify(self: Self) ?[]const u8 {
         return switch (self) {
             .OpFuncCall => "func_name{args}",
@@ -105,16 +120,8 @@ pub const TokenType = enum(u32) {
             .OpenBracket => "'['",
             .CloseBracket => "']'",
             .Dquote => "'\"'",
-            .Squote => "'''",
-            .Backtick => "'`'",
-            .Colon => "':'",
             .Semicolon => "';'",
             .Comma => "','",
-            .Hashtag => "'#'",
-            .Question => "'?'",
-            .Backslash => "'\\'",
-            .Dollar => "'$'",
-            .Amper => "'&'",
             .Pipe => "'|'",
             .Whitespace => "' '",
             .Eof => "end of the input string/file",
@@ -127,34 +134,40 @@ pub const Token = struct {
     string: []const u8,
     type: TokenType,
 
-    const Self = @This();
+    const TokenInitConfig = struct {
+        looking_for_int: bool = false,
+    };
 
-    pub fn init(string: []const u8, looking_for_int: bool) Self {
+    /// construct a token from a string (primary function to construct a token)
+    pub fn from(string: []const u8, tic: TokenInitConfig) Token {
         return if (string.len == 0) .{.string = string, .type = .Eof} else switch (string[0]) {
+            // single character operator/syntax tokens
             '.', '^', '+', '-', '*', '/', '%',
             '(', ')', '{', '}', '[', ']', ',', ';',
-            '|', '~' => Self{.string = string[0..1], .type = toktype_by_char[string[0]]},
+            '|', '~' => .{.string = string[0..1], .type = toktype_by_char[string[0]]},
 
-            '<', '>' => if (string.len > 1 and string[1] == '=') Self{
+            // relational operators
+            '<', '>' => if (string.len > 1 and string[1] == '=') .{
                 .string = string[0..2],
                 .type = switch (string[0]) {
                     '<' => .OpLessEq,
                     '>' => .OpGreaterEq,
                     else => .Invalid,
                 },
-            } else Self{.string = string[0..1], .type = toktype_by_char[string[0]]},
+            } else .{.string = string[0..1], .type = toktype_by_char[string[0]]},
 
+            // equality operators
             '=', '!' => blk: {
                 if ((string.len > 1 and string[1] != '=') or string.len == 1) {
-                    break :blk Self{.string = string[0..1], .type = toktype_by_char[string[0]]};
+                    break :blk .{.string = string[0..1], .type = toktype_by_char[string[0]]};
                 } else if (string.len > 2 and string[2] != '=') {
-                    break :blk Self{.string = string[0..2], .type = switch (string[0]) {
+                    break :blk .{.string = string[0..2], .type = switch (string[0]) {
                         '=' => .OpEq,
                         '!' => .OpNotEq,
                         else => .Invalid,
                     }};
                 } else {
-                    break :blk Self{.string = string[0..3], .type = switch (string[0]) {
+                    break :blk .{.string = string[0..3], .type = switch (string[0]) {
                         '=' => .OpExactEq,
                         '!' => .OpExactNotEq,
                         else => .Invalid,
@@ -162,129 +175,123 @@ pub const Token = struct {
                 }
             },
 
+            // number (integer or decimal depending on tic.looking_for_int)
             '0'...'9' => blk: {
                 var index: usize = 0;
                 while (index < string.len and std.ascii.isDigit(string[index])) : (index += 1) {}
-                if (!looking_for_int and index < string.len and string[index] == '.') {
+                if (!tic.looking_for_int and index < string.len and string[index] == '.') {
                     index += 1;
                     while (index < string.len and std.ascii.isDigit(string[index])) : (index += 1) {}
                 }
 
-                break :blk Self{.string = string[0..index], .type = .Number};
+                break :blk .{.string = string[0..index], .type = .Number};
             },
             
+            // normal identifiers (ex. 'x', 'a', 'ba_9')
             'a'...'z', 'A'...'Z', '_' => blk: {
                 var index: usize = 1;
                 while (index < string.len and
                     (std.ascii.isAlphanumeric(string[index]) or string[index] == '_'))
                     : (index += 1) {}
 
-                break :blk Self{.string = string[0..index], .type = .Ident};
+                break :blk .{.string = string[0..index], .type = .Ident};
             },
 
+            // builtin identifiers (ex. '@dbg')
             '@' => blk: {
                 if (string[1] != '_' and !std.ascii.isAlphabetic(string[1])) {
-                    break :blk Self{.string = string, .type = .Invalid };
+                    break :blk .{.string = string, .type = .Invalid };
                 }
                 var index: usize = 2;
                 while (index < string.len and
                     (std.ascii.isAlphanumeric(string[index]) or string[index] == '_'))
                     : (index += 1) {}
 
-                break :blk Self{.string = string[1..index], .type = .BuiltinIdent};
+                break :blk .{.string = string[1..index], .type = .BuiltinIdent};
             },
+
+            // strings (ex. '"hello"')
             '"' => blk: {
                 var index: usize = 1;
                 while (index < string.len and string[index] != '"') : (index += 1) { }
                 if (index == string.len) {
                     std.log.err("unterminated string literal", .{});
-                    break :blk Self{.string = string, .type = .Invalid};
+                    break :blk .{.string = string, .type = .Invalid};
                 }
-                break :blk Self{.string = string[0..index+1], .type = .String};
+                break :blk .{.string = string[0..index+1], .type = .String};
             },
             
-            else => Self{.string = string, .type = .Invalid},
+            else => .{ .string = &.{}, .type = .InvalidCharacter },
         };
     }
 
+    /// format a token (for debugging)
     pub fn format(
-        self: Self,
+        self: Token,
         w: *std.Io.Writer,
     ) !void {
-        try w.print("{{ .string=\"{s}\", .type=.{t} }}", .{self.string, self.type});
-    }
-
-    pub fn isOp(self: Self) bool {
-        return @intFromEnum(self.type) < @intFromEnum(TokenType.NotOp);
-    }
-    pub fn isBinaryOp(self: Self) bool {
-        return @intFromEnum(self.type) < @intFromEnum(TokenType.OpNot);
-    }
-    pub fn isUnaryOp(self: Self) bool {
-        return self.isOp() and !self.isBinaryOp();
-    }
-    pub fn isRightAssocOp(self: Self) bool {
-        return self.type == .OpPow or self.isUnaryOp();
+        try w.print("{{ \"{s}\", .{t} }}", .{self.string, self.type});
     }
 };
 
-test "token.Token.init" {
-    try expect(Token.init(">=", null).type == .OpGreaterEq);
-    try expect(Token.init("<=", null).type == .OpLessEq);
+test "token.Token.from" {
+    try expectEqual(.OpGreaterEq, Token.from(">=", .{}).type);
+    try expectEqual(.OpLessEq, Token.from("<=", .{}).type);
+    try expectEqual(.Number, Token.from("921.43", .{}).type);
 }
 
 test "token.opSuite" {
-    try expect(Token.init("+ -", null).isOp());
-    try expect(!Token.init("9 .", null).isOp());
-    try expect(Token.init("/", null).isBinaryOp());
-    try expect(Token.init("! ", null).isUnaryOp());
-    try expect(!Token.init("!", null).isBinaryOp());
-    try expect(Token.init("^  ", null).isRightAssocOp());
+    try expect(Token.from("+ -", .{}).type.isOp());
+    try expect(!Token.from("9 .", .{}).type.isOp());
+    try expect(Token.from("/", .{}).type.isBinaryOp());
+    try expect(Token.from("! ", .{}).type.isUnaryOp());
+    try expect(!Token.from("!", .{}).type.isBinaryOp());
+    try expect(Token.from("^  ", .{}).type.isRightAssocOp());
 }
 
 
 pub const toktype_by_char = [_]TokenType{
     .Eof, // 0x00
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Eof,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .Eof, // literal EOF (ctrl+d)
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
     .Whitespace,
     .Whitespace,
     .Whitespace,
     .Whitespace,
     .Whitespace,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
     .Whitespace, // 0x20
 
     .OpNot, // 0x21
     .Dquote,
-    .Hashtag,
-    .Dollar,
+    .InvalidCharacter, // hashtag '#'
+    .InvalidCharacter, // dollar sign '$'
     .OpMod,
-    .Amper,
-    .Squote,
+    .InvalidCharacter, // ampersand '&'
+    .InvalidCharacter, // single quote '\''
     .OpenParen,
     .CloseParen,
     .OpMul,
@@ -303,12 +310,12 @@ pub const toktype_by_char = [_]TokenType{
     .Digit,
     .Digit,
     .Digit,
-    .Colon,
+    .InvalidCharacter, // colon ':'
     .Semicolon,
     .OpLess,
     .OpAssertEqual,
     .OpGreater,
-    .Question,
+    .InvalidCharacter, // question mark '?'
     .OpAt,
     .Letter,
     .Letter,
@@ -337,11 +344,11 @@ pub const toktype_by_char = [_]TokenType{
     .Letter,
     .Letter,
     .OpenBracket,
-    .Backslash,
+    .InvalidCharacter, // backslash '\'
     .CloseBracket,
     .OpPow,
     .Underscore,
-    .Backtick,
+    .InvalidCharacter, // backtick '`'
     .Letter,
     .Letter,
     .Letter,
@@ -372,147 +379,148 @@ pub const toktype_by_char = [_]TokenType{
     .Pipe,
     .CloseBrace,
     .OpTilde,
-    .Invalid, // 0x7f
+    .InvalidCharacter, // 0x7f
 
-    .Invalid, // 0x80 onwards
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
-    .Invalid,
+    .InvalidCharacter, // 0x80 onwards
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
+    .InvalidCharacter,
 };
 
 test "token.toktype_by_char" {
-    try expect(toktype_by_char.len == 256);
-    try expect(toktype_by_char['a'] == .Letter);
-    try expect(toktype_by_char['B'] == .Letter);
-    try expect(toktype_by_char['('] == .OpenParen);
-    try expect(toktype_by_char['_'] == .Underscore);
-    try expect(toktype_by_char['`'] == .Backtick);
-    try expect(toktype_by_char['\\'] == .Backslash);
-    try expect(toktype_by_char['~'] == .OpTilde);
-    try expect(toktype_by_char['|'] == .Pipe);
-    try expect(toktype_by_char['&'] == .Amper);
+    try expectEqual(256, toktype_by_char.len);
+    try expectEqual(.Letter, toktype_by_char['a']);
+    try expectEqual(.Letter, toktype_by_char['B']);
+    try expectEqual(.OpenParen, toktype_by_char['(']);
+    try expectEqual(.Underscore, toktype_by_char['_']);
+    try expectEqual(.InvalidCharacter, toktype_by_char['`']);
+    try expectEqual(.InvalidCharacter, toktype_by_char['\\']);
+    try expectEqual(.OpTilde, toktype_by_char['~']);
+    try expectEqual(.Pipe, toktype_by_char['|']);
+    try expectEqual(.InvalidCharacter, toktype_by_char['&']);
+    try expectEqual(.Digit, toktype_by_char['9']);
 }

@@ -3,7 +3,7 @@ const Build = std.Build;
 
 const extern_pkg_path: []const u8 = "packages";
 
-const out_name = "mmlz";
+const out_name = "mml";
 
 pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
@@ -17,13 +17,6 @@ pub fn build(b: *Build) void {
         .target = target,
         .optimize = optimize,
     });
-    // term_manip
-    const term_manip_pkg_name: []const u8 = "term_manip";
-    const term_manip_pkg = b.createModule(.{
-        .root_source_file = b.path(extern_pkg_path ++ "/" ++ term_manip_pkg_name ++ "/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
 
 
     const libmml_mod = b.createModule(.{
@@ -31,13 +24,6 @@ pub fn build(b: *Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const mml_core_mod = b.createModule(.{
-        .root_source_file = b.path("src/mml-core/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    libmml_mod.addImport("mml-core", mml_core_mod);
-    mml_core_mod.addImport("mml", libmml_mod);
     // LIBMML LIBRARY (currently empty because it has no C exported functions)
     //const libmml = b.addLibrary(.{
     //    .name = "mml",
@@ -61,9 +47,9 @@ pub fn build(b: *Build) void {
 
     //main.linkLibrary(libmml);
     main.root_module.addImport(arg_pkg_name, arg_pkg);
-    main.root_module.addImport(term_manip_pkg_name, term_manip_pkg);
+    const mibu_dep = b.dependency("mibu", .{});
+    main.root_module.addImport("mibu", mibu_dep.module("mibu"));
     main.root_module.addImport("mml", libmml_mod);
-    main.root_module.addImport("mml-core", mml_core_mod);
     b.installArtifact(main);
 
     const run_main = b.addRunArtifact(main);

@@ -1,23 +1,21 @@
 const std = @import("std");
 const Io = std.Io;
-const IoLimit = Io.Limit;
 const posix = std.posix;
 
 const ArgParser = @import("arg_parse").ArgParser;
 
 const mml = @import("mml");
-const Config = mml.config.Config;
+const Config = mml.Config;
 const Expr = mml.expr.Expr;
 const parse = mml.parse;
 const Evaluator = mml.Evaluator;
 
-const core = @import("mml-core");
-
-const term_manip = @import("term_manip");
+const mibu = @import("mibu");
 const prompt = @import("prompt.zig");
 
 var stdout_w: *Io.Writer = undefined;
 var stdin_reader: std.fs.File.Reader = undefined;
+var original_term: ?mibu.term.RawTerm = null;
 
 pub fn main() !void {
     // I/O setup
@@ -43,44 +41,49 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
 
-    // arguments
+    // argument parsing
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    var arg_parser = try ArgParser.parse(allocator, args);
-    defer arg_parser.deinit();
+    var pa = ArgParser.parse(allocator, args) catch |err| switch (err) {
+        error.OutOfMemory => @panic("OOM"),
+        error.ArgumentError => {
+            std.log.err("failed due to argument error", .{});
+            std.process.exit(2);
+        },
+    };
+    defer pa.deinit();
+    pa.usage_initial_message =
+        "mml-zig is a Zig rewrite of the MML mathematical scripting language project.\n" ++
+        "the default action, if none are specified, is to open the REPL (like '--repl' or '-R')\n";
 
-    const expr_str = arg_parser.option([]const u8, "expr", "the expression to evaluate");
-    
+    const expr_str = pa.longShortOption([]const u8, "expr", 'E', "the expression to evaluate");
+    const start_repl = pa.longShortOption(bool, "repl", 'R', "use an interactive prompt (REPL)") orelse false;
+
     // config
     var conf: Config = .{
         .writer = stdout_w,
     };
 
-    const start_repl = arg_parser.option(bool,
-        "repl", "(not fully implemented) use an interactive prompt (REPL)") orelse false;
+    conf.debug_output = pa.longShortOption(bool, "debug", 'd', "enable debug output across the program") orelse false;
 
-    conf.debug_output = arg_parser.option(bool, "debug", "enable debug output across the program") orelse false;
+    conf.bools_print_as_nums = pa.option(bool, "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
+    conf.decimal_precision = pa.option(u32, "precision", "(WARNING: unused) precision to use when displaying decimals") orelse 6;
+    conf.quote_strings = pa.option(bool, "quote-strings", "if set, strings print surrounded by double quotes") orelse false;
 
-    conf.bools_print_as_nums = arg_parser.option(
-        bool,
-        "bools-are-nums",
-        "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
-    conf.decimal_precision = arg_parser.option(
-        u32,
-        "precision",
-        "(WARNING: unused) precision to use when displaying decimals") orelse 6;
-    conf.quote_strings = arg_parser.option(
-        bool,
-        "quote-strings",
-        "if set, strings print surrounded by double quotes") orelse false;
+    const mml_consts_opt = pa.option(bool, "mml-consts", "display list of provided constants in MML") orelse false;
+    const mml_funcs_opt = pa.option(bool, "mml-funcs", "display list of provided functions in MML") orelse false;
+    const print_usage = pa.longShortOption(bool, "help", 'h', "display usage information") orelse false;
 
-    const mml_consts_opt = arg_parser.option(bool, "mml-consts", "display list of provided constants in MML") orelse false;
-    const mml_funcs_opt = arg_parser.option(bool, "mml-funcs", "display list of provided functions in MML") orelse false;
-    const print_usage = arg_parser.option(bool, "help", "display usage information") orelse false;
+    if (!pa.finalize()) {
+        try stdout_w.writeByte('\n');
+        pa.printUsage(stdout_w);
+        try stdout_w.flush();
+        std.process.exit(1);
+    }
 
     if (print_usage) {
-        arg_parser.printUsage(stdout_w);
+        pa.printUsage(stdout_w);
         try stdout_w.flush();
         std.process.exit(1);
     }
@@ -103,22 +106,15 @@ pub fn main() !void {
     }
 
     if (start_repl or expr_str == null) {
-        defer _ = term_manip.restoreTerminal(&stdin_reader.file);
+        defer if (original_term) |*ot| ot.disableRawMode() catch {};
 
-        const res = try prompt.runPrompt(&stdin_reader, &conf);
+        const res = try prompt.runPrompt(&stdin_reader, &conf, &original_term);
 
         try stdout_w.writeAll("\x1b[0 q\x1b[?25h");
         try stdout_w.flush();
 
         if (res != 0) std.process.exit(1)
             else return;
-    }
-
-    if (!arg_parser.finalize()) {
-        try stdout_w.writeByte('\n');
-        arg_parser.printUsage(stdout_w);
-        try stdout_w.flush();
-        std.process.exit(1);
     }
 
     // parsing & evaluating
@@ -138,7 +134,9 @@ pub fn main() !void {
 
 const its_ok_to_print_in_signal_handler = true;
 fn interruptHandler(signum: i32) callconv(.c) void {
-    _ = term_manip.restoreTerminal(&stdin_reader.file);
+    if (original_term) |*ot| {
+        ot.disableRawMode() catch {};
+    }
     stdout_w.writeAll("\x1b[?25h") catch {}; // make cursor visible
 
     if (its_ok_to_print_in_signal_handler) {

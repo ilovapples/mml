@@ -2,7 +2,7 @@ const std = @import("std");
 const complex = std.math.complex;
 const Complex = complex.Complex;
 
-const mml = @import("mml");
+const mml = @import("../root.zig");
 const expr = mml.expr;
 const Expr = expr.Expr;
 const Evaluator = mml.Evaluator;

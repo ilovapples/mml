@@ -1,16 +1,17 @@
 const std = @import("std");
 const Io = std.Io;
 const AtomicOrder = std.builtin.AtomicOrder;
+const posix = std.posix;
+const builtin = @import("builtin");
 
 const mml = @import("mml");
 const Expr = mml.expr.Expr;
-const Config = mml.config.Config;
+const Config = mml.Config;
 const parse = mml.parse;
 const Evaluator = mml.Evaluator;
 
-const core = @import("mml-core");
-
-const term_manip = @import("term_manip");
+const mibu = @import("mibu");
+const RawTerm = mibu.term.RawTerm;
 
 const line_max_len = 512;
 
@@ -19,7 +20,7 @@ var history_used: usize = 0; // may be larger than history_buffer.len; modulo is
 var history_pos: ?usize = null;
 var history_saved_line: [line_max_len]u8 = undefined;
 
-pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
+pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: *?RawTerm) !u8 {
     const prompt_str = ">> ";
     const tty_writer = conf.writer;
 
@@ -37,7 +38,8 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
      ++ "Type 'help' or '@help{}' for help.\n");
 
     try tty_writer.writeAll("\x1b[?25l");
-    term_manip.saveSetTerminalRawMode(&tty_reader.file) catch |e| if (e != error.NotATerminal) return e;
+    try tty_writer.flush();
+    original_term.* = enableRawMode(tty_reader.file.handle) catch |e| if (e != error.NotATerminal) return e else null;
     while (true) {
         try tty_writer.writeAll(prompt_str);
         try tty_writer.flush();
@@ -89,6 +91,9 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         }
 
         eval_finished.store(true, AtomicOrder.release);
+        // can't do this just yet, because it'll cut off the bottom line of whatever the evaluator/parser write
+        // // go back to start of the line and clear the line, so we don't have dots before or after the output
+        //try tty_writer.writeAll("\r\x1b[K");
 
 
         if (val == .code) {
@@ -96,7 +101,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
                 .Exit => break,
                 .ClearScreen => try tty_writer.writeAll("\x1b[1;1f\x1b[2J"),
                 .Help => {
-                    _ = try core.stdmml.builtin__help(eval, &.{});
+                    _ = try mml.core.stdmml.builtin__help(eval, &.{});
                     try tty_writer.writeByte('\n');
                 },
             }
@@ -115,17 +120,11 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config) !u8 {
         history_buffer[history_used % history_buffer.len] = try alloc.dupe(u8, line_buffer[0..line_len.?]);
         history_used += 1;
         history_pos = null;
-        if (false) {
-        for (history_buffer[0..if (history_used <= history_buffer.len) history_used else history_buffer.len]) |l| {
-            try tty_writer.print("'{s}'\n", .{l});
-        }
-        try tty_writer.print("history_used = {}\n", .{history_used});
-        try tty_writer.print("history_pos = {?}\n", .{history_pos});
-        }
     }
-        for (history_buffer[0..if (history_used <= history_buffer.len) history_used else history_buffer.len]) |l| {
-            alloc.free(l);
-        }
+
+    for (history_buffer[0..if (history_used <= history_buffer.len) history_used else history_buffer.len]) |l| {
+        alloc.free(l);
+    }
 
     return 0;
 }
@@ -221,7 +220,7 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
     } else if (std.mem.eql(u8, seq, ALT_RIGHT) // if ALT+RIGHT
             or std.mem.eql(u8, seq, ALT_ANSI ++ RIGHT_C) // or ALT+RIGHT (other test)
             or std.mem.eql(u8, seq, CTRL_ANSI ++ RIGHT_C)) { // or CTRL+RIGHT
-        cursor.* = if (line_len.* == 0) 0 else line_len.* - 1; // go all the way right
+        cursor.* = line_len.*; // go all the way right
     } else if (std.mem.eql(u8, seq, START_ANSI ++ "3~")) { // if DEL
         if (line_len.* > cursor.*) {
             @memmove(line + cursor.*, line[cursor.* + 1..line_len.*]);
@@ -244,13 +243,13 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
         @memcpy(line, hist_line);
         line_len.* = hist_line.len;
         cursor.* = hist_line.len;
-        if (false) {
-        std.debug.print("\ngoing up", .{});
-        std.debug.print("history_used = {}", .{history_used});
-        std.debug.print("history_pos = {?}", .{history_pos});
+        if (false) { // some debug stuf
+            std.debug.print("\ngoing up", .{});
+            std.debug.print("history_used = {}", .{history_used});
+            std.debug.print("history_pos = {?}", .{history_pos});
         }
     } else if (std.mem.eql(u8, seq, START_ANSI ++ DOWN_C)) { // if DOWN, go forward in history
-        
+        // this is not implemented yet (it will be!)
     } else return false;
 
     return true;
@@ -290,3 +289,110 @@ fn dotDotDotThread(w: *Io.Writer, eval_finished: *const std.atomic.Value(bool)) 
     }
     w.writeByte('\r') catch {};
 }
+
+
+// terminal manipulation (copied w/ some modifications from https://github.com/xyaman/mibu)
+fn enableRawMode(handle: std.fs.File.Handle) !RawTerm {
+    return switch (builtin.os.tag) {
+        .linux, .macos => enableRawModePosix(handle),
+        .windows => enableRawModeWindows(handle),
+        else => error.UnsupportedPlatform,
+    };
+}
+
+fn enableRawModePosix(handle: posix.fd_t) !RawTerm {
+    const original_termios = try posix.tcgetattr(handle);
+
+    var termios = original_termios;
+
+    // i needed some of these flags enabled (OPOST and ICRNL), so I had to make a copy
+
+    // https://viewsourcecode.org/snaptoken/kilo/02.enteringRawMode.html
+    // TCSETATTR(3)
+    // reference: void cfmakeraw(struct termios *t)
+
+    termios.iflag.BRKINT = false;
+    termios.iflag.ICRNL = true;
+    termios.iflag.INPCK = false;
+    termios.iflag.ISTRIP = false;
+    termios.iflag.IXON = false;
+
+    termios.oflag.OPOST = true;
+
+    termios.lflag.ECHO = false;
+    termios.lflag.ICANON = false;
+    termios.lflag.IEXTEN = false;
+    termios.lflag.ISIG = false;
+
+    termios.cflag.CSIZE = .CS8;
+
+    termios.cc[@intFromEnum(posix.V.MIN)] = 1;
+    termios.cc[@intFromEnum(posix.V.TIME)] = 0;
+
+    // apply changes
+    try posix.tcsetattr(handle, .FLUSH, termios);
+
+    return .{
+        .context = original_termios,
+        .handle = handle,
+    };
+}
+
+
+
+// windows compatibility functions (copied from https://github.com/xyaman/mibu)
+const windows = std.os.windows;
+const kernel32 = windows.kernel32;
+
+// code copied from `mibu`
+pub const ENABLE_PROCESSED_OUTPUT: windows.DWORD = 0x0001;
+pub const ENABLE_PROCESSED_INPUT: windows.DWORD = 0x0001;
+pub const ENABLE_VIRTUAL_TERMINAL_PROCESSING: windows.DWORD = 0x0004;
+pub const ENABLE_WINDOW_INPUT: windows.DWORD = 0x0008;
+pub const ENABLE_MOUSE_INPUT: windows.DWORD = 0x0010;
+pub const ENABLE_VIRTUAL_TERMINAL_INPUT: windows.DWORD = 0x0200;
+
+pub const DISABLE_NEWLINE_AUTO_RETURN: windows.DWORD = 0x0008;
+
+pub fn enableRawModeWindows(handle: windows.HANDLE) !RawTerm {
+    const old_mode = try getConsoleMode(handle);
+
+    const mode: windows.DWORD = ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT | ENABLE_PROCESSED_OUTPUT | ENABLE_PROCESSED_INPUT;
+    try setConsoleMode(handle, mode);
+
+    return .{
+        .context = old_mode,
+        .handle = handle,
+    };
+}
+
+// https://learn.microsoft.com/en-us/windows/console/getconsolemode
+pub fn getConsoleMode(handle: windows.HANDLE) !windows.DWORD {
+    var mode: windows.DWORD = 0;
+
+    // nonzero value means success
+    if (kernel32.GetConsoleMode(handle, &mode) == 0) {
+        const err = kernel32.GetLastError();
+        return windows.unexpectedError(err);
+    }
+
+    return mode;
+}
+
+pub fn setConsoleMode(handle: windows.HANDLE, mode: windows.DWORD) !void {
+    // nonzero value means success
+    if (kernel32.SetConsoleMode(handle, mode) == 0) {
+        const err = kernel32.GetLastError();
+        return windows.unexpectedError(err);
+    }
+}
+
+pub fn getConsoleScreenBufferInfo(handle: windows.HANDLE) !windows.CONSOLE_SCREEN_BUFFER_INFO {
+    var csbi: windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
+    if (kernel32.GetConsoleScreenBufferInfo(handle, &csbi) == 0) {
+        const err = kernel32.GetLastError();
+        return windows.unexpectedError(err);
+    }
+    return csbi;
+}
+

@@ -1,9 +1,11 @@
 const std = @import("std");
+const fmt = std.fmt;
 const Complex = std.math.Complex;
 
-const token = @import("token.zig");
-const config_mod = @import("config.zig");
-const Evaluator = @import("Evaluator.zig");
+const mml = @import("root.zig");
+const token = mml.token;
+const Config = mml.Config;
+const Evaluator = mml.Evaluator;
 
 pub const Expr = union(enum) {
     invalid: void,
@@ -34,7 +36,7 @@ pub const Expr = union(enum) {
     const Self = @This();
     pub const Kinds = @typeInfo(Expr).@"union".tag_type.?;
 
-    pub fn init(val: anytype) Self {
+    pub fn init(val: anytype) Self { // not very useful for general use, just here so the evaluator code isn't too verbose
         return switch (@TypeOf(val)) {
             f64, comptime_float => .{ .real_number = val },
             Complex(f64) => .{ .complex_number = val },
@@ -47,12 +49,8 @@ pub const Expr = union(enum) {
         };
     }
 
-    fn printRecurse(
-        self: ?*const Self,
-        config: config_mod.Config,
-        indent: u32,
-    ) void {
-        const w = config.writer;
+    fn printRecurse(self: ?*const Self, conf: Config, indent: u32) void {
+        const w = conf.writer;
         printIndent(w, indent);
         if (self == null) {
             w.writeAll("(null)") catch return;
@@ -64,47 +62,50 @@ pub const Expr = union(enum) {
             .operation => {
                 w.print("Operation(.{t},\n", .{unwrapped_expr.operation.op}) catch return;
 
-                Expr.printRecurse(unwrapped_expr.operation.left, config, indent+4);
+                Expr.printRecurse(unwrapped_expr.operation.left, conf, indent+4);
                 if (unwrapped_expr.operation.right) |right| {
                     w.writeAll(",\n") catch return;
-                    Expr.printRecurse(right, config, indent+4);
+                    Expr.printRecurse(right, conf, indent+4);
                 }
 
                 w.writeAll(",\n") catch return;
                 printIndent(w, indent);
                 w.writeByte(')') catch return;
             },
-            .real_number => w.print("Real({f})", .{unwrapped_expr}) catch return,
-            .complex_number => w.print("Complex({f})", .{unwrapped_expr}) catch return,
-            .boolean => w.print("Bool({f})", .{unwrapped_expr}) catch return,
-            .identifier => w.print("Identifier('{s}')", .{unwrapped_expr.identifier}) catch return,
-            .builtin_ident => w.print("BuiltinIdent('@{s}')", .{unwrapped_expr.builtin_ident}) catch return,
-            .string => w.print("String('{s}')", .{unwrapped_expr.string}) catch return,
+            .real_number => w.print("Real({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}) catch return,
+            .complex_number => w.print("Complex({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}) catch return,
+            .boolean => w.print("Bool({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}) catch return,
+            .identifier => w.print("Identifier(\"{s}\")", .{unwrapped_expr.identifier}) catch return,
+            .builtin_ident => w.print("BuiltinIdent(\"@{s}\")", .{unwrapped_expr.builtin_ident}) catch return,
+            .string => w.print("String(\"{s}\")", .{unwrapped_expr.string}) catch return,
             .vector => {
                 w.print("Vector(n={},\n", .{unwrapped_expr.vector.len}) catch return;
                 for (unwrapped_expr.vector) |e| {
-                    Expr.printRecurse(e, config, indent+4);
+                    Expr.printRecurse(e, conf, indent+4);
                     w.writeAll(",\n") catch return;
                 }
                 printIndent(w, indent);
                 w.writeByte(')') catch return;
             },
-            .integer => w.print("Integer({f})", .{unwrapped_expr}) catch return,
+            .integer => w.print("Integer({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}) catch return,
             .code => w.print("Code(.{t})", .{unwrapped_expr.code}) catch return,
             else => w.writeAll("(null)") catch return,
         }
 
         w.flush() catch return;
     }
-    pub fn print(self: *const Self, config: config_mod.Config) void {
-       self.printRecurse(config, 0);
+    pub fn print(self: *const Self, conf: Config) void {
+       self.printRecurse(conf, 0);
     }
     pub fn printFmt(self: Self, w: *std.Io.Writer) !void {
         self.printRecurse(.{.writer = w}, 0);
     }
+    pub fn printValueFmt(self: Self, w: *std.Io.Writer) !void {
+        self.printValue(.{.writer = w}) catch {};
+    }
 
-    pub fn printValue(self: Self, config: config_mod.Config) Evaluator.EvalError!void {
-        const w = config.writer;
+    pub fn printValue(self: Self, conf: Config) Evaluator.EvalError!void {
+        const w = conf.writer;
         switch (self) {
             .nothing => {},
             .real_number => w.print("{d}", .{self.real_number}) catch return,
@@ -114,29 +115,29 @@ pub const Expr = union(enum) {
                 @abs(self.complex_number.im),
             }) catch return,
             .boolean => {
-                if (config.bools_print_as_nums) {
+                if (conf.bools_print_as_nums) {
                     w.print("{d}", .{@as(f64, @floatFromInt(@intFromBool(self.boolean)))}) catch return;
                 } else {
                     w.writeAll(if (self.boolean) "true" else "false") catch return;
                 }
             },
-            .string => if (config.quote_strings)
+            .string => if (conf.quote_strings)
                 w.print("\"{s}\"", .{self.string}) catch return
             else
                 w.print("{s}", .{self.string}) catch return,
             .identifier => w.print("{s}", .{self.identifier}) catch return,
             .vector => {
-                if (config.evaluator == null) {
-                    std.log.err("called `printValue` without saving an evaluator in the config.\n", .{});
+                if (conf.evaluator == null) {
+                    std.log.err("called `printValue` on a vector without saving an evaluator in the config.\n", .{});
                     return;
                 }
-                var new_config = config;
-                new_config.quote_strings = true;
+                var new_conf = conf;
+                new_conf.quote_strings = true;
 
                 w.writeByte('[') catch return;
                 for (self.vector, 0..) |e, i| {
-                    const val = try config.evaluator.?.eval(e);
-                    try Expr.printValue(val, new_config);
+                    const val = try conf.evaluator.?.eval(e);
+                    try Expr.printValue(val, new_conf);
                     if (i < self.vector.len - 1) w.writeAll(", ") catch return;
                 }
                 w.writeByte(']') catch return;
@@ -147,14 +148,9 @@ pub const Expr = union(enum) {
         }
     }
 
-    // formats value-typed expressions (no operations, but also no vectors)
-    pub fn format(
-        self: Self,
-        w: *std.Io.Writer,
-    ) !void {
-        if (self == .vector) return;
-        const temp_config: config_mod.Config = .{ .writer = w };
-        self.printValue(temp_config) catch return;
+    // formats expressions as AST (with Expr.print)
+    pub fn format(self: *const Self, w: *std.Io.Writer) !void {
+        self.print(.{ .writer = w });
     }
 
     pub fn getReal(self: Self) f64 {

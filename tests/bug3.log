@@ -1,0 +1,30 @@
+MML Interactive Prompt 0.1.0 (zig ver.)
+Type 'exit' or ctrl+d to quit the prompt
+Type 'help' or '@help{}' for help.
+>> |[~~9]|
+thread 2053901 panic: reached unreachable code
+Parsed in 0 ms
+./Users/agrossman27/coding/zig/mml-zig/src/expr.zig:167:21: 0x1002e67c3 in getComplex (mmlz)
+            else => unreachable,
+                    ^
+/Users/agrossman27/coding/zig/mml-zig/src/Evaluator.zig:216:66: 0x1002e2067 in applyOp (mmlz)
+                            sum += (try state.eval(e)).getComplex().squaredMagnitude();
+                                                                 ^
+/Users/agrossman27/coding/zig/mml-zig/src/Evaluator.zig:137:29: 0x1002d2537 in evalRecurse (mmlz)
+    return try state.applyOp(
+                            ^
+/Users/agrossman27/coding/zig/mml-zig/src/Evaluator.zig:144:43: 0x1002d145b in eval (mmlz)
+    state.last_val = try state.evalRecurse(e);
+                                          ^
+/Users/agrossman27/coding/zig/mml-zig/src/prompt.zig:80:28: 0x1002d3017 in runPrompt (mmlz)
+            val = eval.eval(e) catch .{.invalid = {}};
+                           ^
+/Users/agrossman27/coding/zig/mml-zig/src/main.zig:110:41: 0x1002d56d3 in main (mmlz)
+        const res = try prompt.runPrompt(&stdin_reader, &conf);
+                                        ^
+/Users/agrossman27/homebrew/Cellar/zig/0.15.1/lib/zig/std/start.zig:625:37: 0x1002d87e3 in main (mmlz)
+            const result = root.main() catch |err| {
+                                    ^
+???:?:?: 0x19ecfeb97 in ??? (???)
+???:?:?: 0x0 in ??? (???)
+zsh: abort      zig-out/bin/mmlz -d

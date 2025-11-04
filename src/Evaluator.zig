@@ -4,13 +4,13 @@ const Complex = std.math.Complex;
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
-const expr = @import("expr.zig");
+const mml = @import("root.zig");
+const expr = mml.expr;
 const Expr = expr.Expr;
-const token = @import("token.zig");
-const Config = @import("config.zig").Config;
-
-const core = @import("mml-core");
+const token = mml.token;
+const Config = mml.Config;
 
 conf: ?*Config = null,
 variable_map: std.StringHashMap(*Expr),
@@ -37,7 +37,7 @@ const Self = @This();
 
 /// Initialize an Evaluator (along with other global state that needs to be initialized).
 /// Uses an ArenaAllocator with child allocator `alloc` under the hood.
-pub fn init(arena: *ArenaAllocator, conf: *Config) !Self {
+pub fn init(arena: *ArenaAllocator, conf: ?*Config) !Self {
     const alloc = arena.allocator();
     const n_initialized_val = n_initialized.load(.acquire);
     if (n_initialized_val == 0) {
@@ -176,7 +176,7 @@ fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
             func_name, first_arg,
         });
     } else {
-        std.log.err("undefined function `{s}` for function call without zero arguments", .{func_name});
+        std.log.err("undefined function `{s}` for function call with zero arguments", .{func_name});
     }
     return EvalError.BadFuncCall;
 }
@@ -437,20 +437,21 @@ pub fn dropComplexIfZeroImag(z: Complex(f64)) ?f64 {
 }
 
 test "Evaluator.dropComplexIfZeroImag" {
-    try expect(dropComplexIfZeroImag(Complex(f64).init(19.0, 0.0)).? == 19.0);
+    try expectEqual(19.0, dropComplexIfZeroImag(Complex(f64).init(19.0, 0.0)).?);
 }
 
 test "Evaluator.eval" {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const Evaluator = Self;
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const allocator = arena.allocator();
 
     var buffer: [512]u8 = undefined;
     var stderr_writer = std.fs.File.stderr().writer(&buffer);
     const stderr = &stderr_writer.interface;
 
-    var config = Config{.writer = stderr};
-    var evaluator = try Self.init(allocator, &config);
+    var config: Config = .{ .writer = stderr };
+    var evaluator: Evaluator = try .init(&arena, &config);
     defer evaluator.deinit();
 }
 
@@ -474,8 +475,8 @@ fn initBuiltins() !void {
 fn initializeConstants() !void {
     try constants_map.put("true", Expr.init(true));
     try constants_map.put("false", Expr.init(false));
-    try core.math.initConstants(&constants_map);
-    try core.stdmml.initConstants(&constants_map);
+    try mml.core.math.initConstants(&constants_map);
+    try mml.core.stdmml.initConstants(&constants_map);
 }
 
 fn initializeFuncMaps() !void {
@@ -483,8 +484,8 @@ fn initializeFuncMaps() !void {
         .multiarg_funcs_map = &multiarg_funcs_map,
         .builtin_funcs_map = &builtin_funcs_map,
     };
-    try core.math.initFuncs(funcs_struct);
-    try core.stdmml.initFuncs(funcs_struct);
+    try mml.core.math.initFuncs(funcs_struct);
+    try mml.core.stdmml.initFuncs(funcs_struct);
 }
 
 pub fn printFuncsList(_: *const Self, w: *Io.Writer) void {
