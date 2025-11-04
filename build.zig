@@ -8,6 +8,7 @@ const out_name = "mml";
 pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const use_llvm = b.option(bool, "use-llvm", "use llvm? 'false' is not recommended for non-x86_64 targets");
 
     // PACKAGES
     // arg
@@ -43,6 +44,7 @@ pub fn build(b: *Build) void {
             .target = target,
             .optimize = optimize,
         }),
+        .use_llvm = use_llvm,
     });
 
     //main.linkLibrary(libmml);
