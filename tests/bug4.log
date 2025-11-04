@@ -1,0 +1,20 @@
+agrossman27 ~/coding/zig/mml $ mml -E 'x=[[3]];@dbg_ident{x.0}'                                                                                                           mml/. (main)
+thread 4728767 panic: access of union field 'identifier' while field 'operation' is active
+/Users/agrossman27/coding/zig/mml/src/mml-core/stdmml.zig:44:38: 0x102d5a7bb in builtin__dbg_ident (mml)
+    const e = state.findIdent(args[0].identifier);
+                                     ^
+/Users/agrossman27/coding/zig/mml/src/Evaluator.zig:156:33: 0x102d760e3 in applyFunc (mml)
+            return try func.func(state, args);
+                                ^
+/Users/agrossman27/coding/zig/mml/src/Evaluator.zig:135:35: 0x102d5ce3b in evalRecurse (mml)
+        return try state.applyFunc(left.?.*, right_val_vec.vector);
+                                  ^
+/Users/agrossman27/coding/zig/mml/src/Evaluator.zig:145:43: 0x102d62ed7 in main (mml)
+    state.last_val = try state.evalRecurse(e);
+                                          ^
+/Users/agrossman27/homebrew/Cellar/zig/0.15.1/lib/zig/std/start.zig:625:37: 0x102d6507f in main (mml)
+            const result = root.main() catch |err| {
+                                    ^
+???:?:?: 0x19ecfeb97 in ??? (???)
+???:?:?: 0x0 in ??? (???)
+zsh: abort      mml -E 'x=[[3]];@dbg_ident{x.0}'
