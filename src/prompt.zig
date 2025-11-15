@@ -65,36 +65,36 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
         _ = try std.Thread.spawn(.{}, dotDotDotThread, .{ tty_writer, &eval_finished });
 
         // BEGIN LINE PARSING & EVALUATION
-        const start_parse_time = std.time.nanoTimestamp();
-        // parse line into expressions
-        const exprs = parse.parseStatements(@ptrCast(@alignCast(eval.arena_alloc.ptr)), line_buffer[0..line_len.?]) catch {
+        const val = blk: {
+            const start_parse_time = std.time.nanoTimestamp();
+            // parse line into expressions
+            const exprs = parse.parseStatements(@ptrCast(@alignCast(eval.arena_alloc.ptr)), line_buffer[0..line_len.?]) catch {
+                eval_finished.store(true, AtomicOrder.release);
+                break :blk Expr{ .invalid = {} };
+            };
+            const end_parse_time = std.time.nanoTimestamp();
+            if (conf.debug_output) {
+                try tty_writer.print("Parsed in {} ms\n", .{
+                    @divTrunc(end_parse_time - start_parse_time, std.time.ns_per_ms)
+                });
+            }
+
+            const start_eval_time = std.time.nanoTimestamp();
+            // evaluate expressions
+            var val: Expr = .{.invalid = {}};
+            for (exprs) |e| {
+                val = eval.eval(e) catch .{.invalid = {}};
+            }
+            const end_eval_time = std.time.nanoTimestamp();
+            if (conf.debug_output) {
+                try tty_writer.print("\rEvaluated in {} ms\n", .{
+                    @divTrunc(end_eval_time - start_eval_time, std.time.ns_per_ms)
+                });
+            }
+
             eval_finished.store(true, AtomicOrder.release);
-            continue;
+            break :blk val;
         };
-        const end_parse_time = std.time.nanoTimestamp();
-        if (conf.debug_output) {
-            try tty_writer.print("Parsed in {} ms\n", .{
-                @divTrunc(end_parse_time - start_parse_time, std.time.ns_per_ms)
-            });
-        }
-
-        const start_eval_time = std.time.nanoTimestamp();
-        // evaluate expressions
-        var val: Expr = .{.invalid = {}};
-        for (exprs) |e| {
-            val = eval.eval(e) catch .{.invalid = {}};
-        }
-        const end_eval_time = std.time.nanoTimestamp();
-        if (conf.debug_output) {
-            try tty_writer.print("\rEvaluated in {} ms\n", .{
-                @divTrunc(end_eval_time - start_eval_time, std.time.ns_per_ms)
-            });
-        }
-
-        eval_finished.store(true, AtomicOrder.release);
-        // can't do this just yet, because it'll cut off the bottom line of whatever the evaluator/parser write
-        // // go back to start of the line and clear the line, so we don't have dots before or after the output
-        //try tty_writer.writeAll("\r\x1b[K");
 
 
         if (val == .code) {
@@ -123,7 +123,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
         history_pos = null;
     }
 
-    for (history_buffer[0..if (history_used <= history_buffer.len) history_used else history_buffer.len]) |l| {
+    for (if (history_used <= history_buffer.len) history_buffer[0..history_used] else history_buffer[0..]) |l| {
         alloc.free(l);
     }
 

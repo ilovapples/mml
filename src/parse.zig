@@ -177,7 +177,7 @@ const ParserState = struct {
             if (self.looking_for_int) {
                 left.* = @unionInit(Expr, "integer", std.fmt.parseInt(i64, tok.string, 10) catch |e| blk: switch (e) {
                     std.fmt.ParseIntError.Overflow => {
-                        std.log.err("integer read as '{s}' has a magnitude "
+                        std.log.warn("integer read as '{s}' has a magnitude "
                                  ++ "larger than about 9.2 quintillion (2^63). "
                                  ++ "assuming infinity.", .{tok.string});
                         break :blk std.math.maxInt(i64);
@@ -185,7 +185,7 @@ const ParserState = struct {
                     std.fmt.ParseIntError.InvalidCharacter => {
                         // if this is reached, it means either std.fmt and I disagree on what counts as an integer, or I did my checking wrong
                         @branchHint(.cold);
-                        std.log.err("failed to read '{s}' as an integer. "
+                        std.log.warn("failed to read '{s}' as an integer. "
                                  ++ "assuming 0.", .{tok.string});
                         break :blk 0;
                     },
@@ -194,7 +194,7 @@ const ParserState = struct {
                 left.* = @unionInit(Expr, "real_number", std.fmt.parseFloat(f64, tok.string) catch blk: {
                     // if this is reached, it means either std.fmt and I disagree on what counts as a number, or I did my checking wrong
                     @branchHint(.cold);
-                    std.log.err("failed to read '{s}' as a real number. "
+                    std.log.warn("failed to read '{s}' as a real number. "
                              ++ "assuming NaN (not a number).", .{tok.string});
                     break :blk std.math.nan(f64);
                 });

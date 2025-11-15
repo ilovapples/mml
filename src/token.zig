@@ -138,6 +138,8 @@ pub const Token = struct {
         looking_for_int: bool = false,
     };
 
+    const digits = "0123456789";
+
     /// construct a token from a string (primary function to construct a token)
     pub fn from(string: []const u8, tic: TokenInitConfig) Token {
         return if (string.len == 0) .{.string = string, .type = .Eof} else switch (string[0]) {
@@ -177,19 +179,36 @@ pub const Token = struct {
 
             // number (integer or decimal depending on tic.looking_for_int)
             '0'...'9' => blk: {
-                var index: usize = 0;
-                while (index < string.len and std.ascii.isDigit(string[index])) : (index += 1) {}
-                if (!tic.looking_for_int and index < string.len and string[index] == '.') {
-                    index += 1;
-                    while (index < string.len and std.ascii.isDigit(string[index])) : (index += 1) {}
+                var end_i: usize = 0;
+                const non_digit_index = std.mem.indexOfNone(u8, string, digits ++ "_");
+                if (non_digit_index == null) break :blk .{ .string = string, .type = .Number };
+                end_i = non_digit_index.?;
+
+                // consume decimal point
+                if (string[end_i] == '.' and !tic.looking_for_int) {
+                    end_i = std.mem.indexOfNonePos(u8, string, end_i + 1, digits ++ "_") orelse
+                        break :blk .{ .string = string, .type = .Number };
                 }
 
-                break :blk .{.string = string[0..index], .type = .Number};
+                // consume scientific form section
+                if ((string[end_i] == 'e' or string[end_i] == 'E') and !tic.looking_for_int) {
+                    if (end_i == string.len-1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
+                    end_i += 1;
+                    if (string[end_i] == '+' or string[end_i] == '-') {
+                        if (end_i == string.len-1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
+                        end_i += 1;
+                    }
+                    end_i = std.mem.indexOfNonePos(u8, string, end_i+1, digits ++ "_") orelse
+                        break :blk .{ .string = string, .type = .Number };
+                }
+
+                break :blk .{.string = string[0..end_i], .type = .Number};
             },
             
             // normal identifiers (ex. 'x', 'a', 'ba_9')
             'a'...'z', 'A'...'Z', '_' => blk: {
-                var index: usize = 1;
+                var index: usize = std.mem.indexOfNonePos(u8, string, 1, "_" ++ std.ascii.letters ++ digits) orelse
+                    break :blk .{ .string = string, .type = .Ident };
                 while (index < string.len and
                     (std.ascii.isAlphanumeric(string[index]) or string[index] == '_'))
                     : (index += 1) {}
@@ -199,6 +218,8 @@ pub const Token = struct {
 
             // builtin identifiers (ex. '@dbg')
             '@' => blk: {
+                if (string.len == 1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
+
                 if (string[1] != '_' and !std.ascii.isAlphabetic(string[1])) {
                     break :blk .{.string = string, .type = .Invalid };
                 }
