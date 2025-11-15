@@ -113,7 +113,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
         conf.quote_strings = true;
         try val.printValue(conf.*);
         conf.quote_strings = saved_quote_strings;
-        try tty_writer.writeByte('\n');
+        if (val != .nothing) try tty_writer.writeByte('\n');
 
         conf.evaluator.?.last_val = val;
 

@@ -25,6 +25,7 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
     try funcs_maps.builtin_funcs_map.put("as", .{.n_args = 2, .func = &builtin__as});
     try funcs_maps.builtin_funcs_map.put("undef", .{.n_args = 1, .func = &builtin__undef});
     try funcs_maps.builtin_funcs_map.put("help", .{.n_args = 0, .func = &builtin__help});
+    try funcs_maps.builtin_funcs_map.put("assign", .{.n_args = 2, .func = &builtin__assign});
 }
 
 fn builtin__dbg(state: *Evaluator, args: []*Expr) EvalError!Expr {
@@ -41,7 +42,13 @@ fn builtin__typeof(state: *Evaluator, args: []*Expr) EvalError!Expr {
     return Expr{ .string = @tagName(val) };
 }
 fn builtin__dbg_ident(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    const e = state.findIdent(args[0].identifier);
+    const arg_0 = args[0].*;
+    if (arg_0 != .identifier and arg_0 != .builtin_ident) {
+        std.log.err("@dbg_ident{{ident}} takes an identifier or a builtin identifier", .{});
+        return EvalError.BadFuncCall;
+    }
+
+    const e = state.findIdent(if (arg_0 == .identifier) arg_0.identifier else arg_0.builtin_ident);
     if (e == null) return Expr{.string = "unknown"};
     e.?.print(state.conf.?.*);
 
@@ -157,7 +164,7 @@ pub fn builtin__help(state: *Evaluator, args: []*Expr) EvalError!Expr {
         .Funcs = "funcs",
         .Consts = "constants",
     };
-    const ret = Expr{.nothing = {}};
+    const ret = Expr.init({});
     if (args.len == 0) {
         w.writeAll("Potential arguments to '@help':\n") catch return ret;
         const fields = @typeInfo(@TypeOf(HelpArgs)).@"struct".fields;
@@ -169,16 +176,29 @@ pub fn builtin__help(state: *Evaluator, args: []*Expr) EvalError!Expr {
         return ret;
     }
 
-    const arg_1 = args[0].*;
-    if (!arg_1.expectType(.string, "@help{s} takes a string literal")) return EvalError.BadFuncCall;
-    if (std.mem.eql(u8, arg_1.string, HelpArgs.Funcs)) {
+    const arg_0 = args[0].*;
+    if (!arg_0.expectType(.string, "@help{s} takes a string literal")) return EvalError.BadFuncCall;
+    if (std.mem.eql(u8, arg_0.string, HelpArgs.Funcs)) {
         state.printFuncsList(w);
-    } else if (std.mem.eql(u8, arg_1.string, HelpArgs.Consts)) {
+    } else if (std.mem.eql(u8, arg_0.string, HelpArgs.Consts)) {
         state.printConstantsList(w);
     } else {
-        std.log.err("Invalid '@help' argument '{s}' (try '@help{{}}' to see legal arguments)", .{arg_1.string});
+        std.log.err("Invalid '@help' argument '{s}' (try '@help{{}}' to see legal arguments)", .{arg_0.string});
         return EvalError.BadFuncCall;
     }
 
     return ret;
+}
+
+fn builtin__assign(state: *Evaluator, args: []*Expr) EvalError!Expr {
+    const arg_0 = args[0].*;
+    if (!arg_0.expectType(.identifier, "@assign{ident, expr} takes an identifier for the first argument.")) {
+        return EvalError.BadFuncCall;
+    }
+
+    const new_expr = try state.arena_alloc.create(Expr);
+    new_expr.* = try state.eval(args[1]);
+    try state.variable_map.put(arg_0.identifier, new_expr);
+
+    return new_expr.*;
 }

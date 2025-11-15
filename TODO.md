@@ -6,12 +6,7 @@
 - [x] actually add the prompt because that initial commit message was a lie and it doesn't exist yet
 - [x] change Expr printing functions to catch printing errors themselves because that's annoying
 - [x] make evaluation return a smaller set of errors (i should be catching more of them)
-- [ ] also functions at some point would be good, but they're not a priority
-    - [ ] create function entry struct--either n_params + *const Expr or paramnames: []const []const u8 + *const Expr (probably letter to tell what's a parameter and where to put arguments)
-    - [ ] data structure to hold functions (probably string hashmap to function entries)
-    - [ ] add check in evaluator to detect ASSERT_EQ(FUNC_CALL(ident, args_vec), some_expr) (`k{a,b,...} = expr`) to assign the expression and generate the function entry
-    - [ ] make them callable in `Evaluator.applyFunc` and check for correct number of arguments
-        - [ ] figure out how to insert parameters (maybe have a global call stack with the scope? might be simpler than anything else)
+- [x] also functions at some point would be good, but they're not a priority
 - [x] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works)
 - [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
     - [ ] gonna need a lot of enums (or one big one?)
@@ -31,12 +26,15 @@
 * [ ] other features for prompt/REPL
     - [ ] autocompletion/suggestions
     - [ ] history (like up and down arrow on a shell)
+        * [x] up arrow
+        * [ ] down arrow
 * [ ] other features (misc.)
     - [x] some way to put the output of `@dbg{expr}` into a `string` from MML.
     - [ ] make `{}` a proper operation on `function`-type expressions.
-- [ ] make argument parser read arguments as they're requested. will help it know how to deal with stuff like '-h 9', where '-h' is a bool option and 9 shouldn't be considered its value, but is. it's impossible for it to know how to deal with it right now.
-- [ ] fix bug in [tests/bug3.log](tests/bug3.log)
-- [ ] also the annoying bug in [tests/bug4.log](tests/bug4.log). seems like `@dbg_ident` doesn't check that expression passed to it is an identifier
+- [ ] make argument parser read arguments as they're requested. will help it know how to deal with stuff like '-h 9', where '-h' is a bool option and
+      9 shouldn't be considered its value, but is. it's impossible for it to know how to deal with it right now. (partially implemented but not in this repo yet)
+- [ ] fix bug in [tests/bug3.log](tests/bug3.log) (seems to happen with any (or a some) `|x|` where x is a nested vector)
+- [x] also the annoying bug in [tests/bug4.log](tests/bug4.log). seems like `@dbg_ident` doesn't check that expression passed to it is an identifier
     
 
 

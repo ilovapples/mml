@@ -20,6 +20,7 @@ pub const Expr = union(enum) {
     identifier: []const u8,
     vector: []*Expr,
     integer: i64,
+    func_object: FuncObject,
 
     pub const Code = enum(usize) {
         Exit,
@@ -33,10 +34,16 @@ pub const Expr = union(enum) {
         op: token.TokenType,
     };
 
+    pub const FuncObject = struct {
+        params: [][]const u8,
+        body: *Expr,
+    };
+
     const Self = @This();
     pub const Kinds = @typeInfo(Expr).@"union".tag_type.?;
-
-    pub fn init(val: anytype) Self { // not very useful for general use, just here so the evaluator code isn't too verbose
+    
+    /// not very useful for general use, just here so the evaluator code isn't too verbose
+    pub fn init(val: anytype) Self {
         return switch (@TypeOf(val)) {
             f64, comptime_float => .{ .real_number = val },
             Complex(f64) => .{ .complex_number = val },
@@ -49,56 +56,70 @@ pub const Expr = union(enum) {
         };
     }
 
-    fn printRecurse(self: ?*const Self, conf: Config, indent: u32) void {
+    fn printRecurse(self: ?*const Self, conf: Config, indent: u32) !void {
         const w = conf.writer;
         printIndent(w, indent);
         if (self == null) {
-            w.writeAll("(null)") catch return;
-            w.flush() catch return;
+            try w.writeAll("(null)");
+            try w.flush();
             return;
         }
         const unwrapped_expr = self.?;
         switch (unwrapped_expr.*) {
             .operation => {
-                w.print("Operation(.{t},\n", .{unwrapped_expr.operation.op}) catch return;
+                try w.print("Operation(.{t},\n", .{unwrapped_expr.operation.op});
 
-                Expr.printRecurse(unwrapped_expr.operation.left, conf, indent+4);
+                try Expr.printRecurse(unwrapped_expr.operation.left, conf, indent+4);
                 if (unwrapped_expr.operation.right) |right| {
-                    w.writeAll(",\n") catch return;
-                    Expr.printRecurse(right, conf, indent+4);
+                    try w.writeAll(",\n");
+                    try Expr.printRecurse(right, conf, indent+4);
                 }
 
-                w.writeAll(",\n") catch return;
+                try w.writeAll(",\n");
                 printIndent(w, indent);
-                w.writeByte(')') catch return;
+                try w.writeByte(')');
             },
-            .real_number => w.print("Real({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}) catch return,
-            .complex_number => w.print("Complex({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}) catch return,
-            .boolean => w.print("Bool({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}) catch return,
-            .identifier => w.print("Identifier(\"{s}\")", .{unwrapped_expr.identifier}) catch return,
-            .builtin_ident => w.print("BuiltinIdent(\"@{s}\")", .{unwrapped_expr.builtin_ident}) catch return,
-            .string => w.print("String(\"{s}\")", .{unwrapped_expr.string}) catch return,
+            .real_number => try w.print("Real({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}),
+            .complex_number => try w.print("Complex({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}),
+            .boolean => try w.print("Bool({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}),
+            .identifier => try w.print("Identifier(\"{s}\")", .{unwrapped_expr.identifier}),
+            .builtin_ident => try w.print("BuiltinIdent(\"@{s}\")", .{unwrapped_expr.builtin_ident}),
+            .string => try w.print("String(\"{s}\")", .{unwrapped_expr.string}),
             .vector => {
-                w.print("Vector(n={},\n", .{unwrapped_expr.vector.len}) catch return;
+                try w.print("Vector(n={},\n", .{unwrapped_expr.vector.len});
                 for (unwrapped_expr.vector) |e| {
-                    Expr.printRecurse(e, conf, indent+4);
-                    w.writeAll(",\n") catch return;
+                    try Expr.printRecurse(e, conf, indent+4);
+                    try w.writeAll(",\n");
                 }
                 printIndent(w, indent);
-                w.writeByte(')') catch return;
+                try w.writeByte(')');
             },
-            .integer => w.print("Integer({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}) catch return,
-            .code => w.print("Code(.{t})", .{unwrapped_expr.code}) catch return,
-            else => w.writeAll("(null)") catch return,
+            .integer => try w.print("Integer({f})", .{fmt.alt(unwrapped_expr.*, .printValueFmt)}),
+            .code => try w.print("Code(.{t})", .{unwrapped_expr.code}),
+            .func_object => {
+                try w.writeAll("FunctionObject(params=[");
+                for (unwrapped_expr.func_object.params, 0..) |param, i| {
+                    try w.print("'{s}'{s}", .{
+                        param,
+                        if (i == unwrapped_expr.func_object.params.len - 1) "" else ", "
+                    });
+                }
+                try w.writeAll("], body=\n");
+                try Expr.printRecurse(unwrapped_expr.func_object.body, conf, indent+4);
+                try w.writeByte('\n');
+                printIndent(w, indent);
+                try w.writeByte(')');
+            },
+            else => try w.writeAll("(null)"),
         }
 
-        w.flush() catch return;
+        try w.flush();
     }
     pub fn print(self: *const Self, conf: Config) void {
-       self.printRecurse(conf, 0);
+       self.printRecurse(conf, 0) catch return;
     }
     pub fn printFmt(self: Self, w: *std.Io.Writer) !void {
-        self.printRecurse(.{.writer = w}, 0);
+        try self.printRecurse(.{.writer = w}, 0);
     }
     pub fn printValueFmt(self: Self, w: *std.Io.Writer) !void {
         self.printValue(.{.writer = w}) catch {};
@@ -144,6 +165,7 @@ pub const Expr = union(enum) {
             },
             .integer => w.print("{}", .{self.integer}) catch return,
             .code => w.print(".{t}", .{self.code}) catch return,
+            .func_object => w.writeAll("FunctionObject") catch return,
             else => w.writeAll("(null)") catch return,
         }
     }

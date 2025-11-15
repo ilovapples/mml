@@ -19,6 +19,13 @@ C === 26 + 2/3
 ```
 Notice that `F` wasn't defined before the second line `F = 80`, and yet `C` was well defined by its definition regardless of being dependent on the value of `F`. This also means that, when `F` is changed and `C` is reevaluated, it will reflect
 the new value of `F`, almost as if `C` were a function `C{F}` (functions in this form are planned, but work has not begun just yet).
+Update: user-defined functions have been implemented in a minimal-ish state! this means we can now do this instead:
+```python
+C{F} = (F - 32) * 5/9
+C{80} === 26 + 2/3
+```
+Unfortunately, there is no stack yet, so nested user-defined function calls are not supported (you can't call a user-defined function from within a user-defined function).
+It won't throw an error, but the local variables in each user-defined function call are overwritten each time a user-defined function is called.
 
 A variable/expression is 'evaluated' when it is used anywhere other than a variable definition or in a vector literal (see [Advanced Syntax](#advanced-syntax) for more on vectors). The interactive prompt (accessed via ~~`-I` or `--interactive`~~ `-R` or `--repl` from
 the executable) automatically evaluates the last expression in each input line, but nothing is automatically evaluated if using the pure library (or the `--expr=` and `--no-eval` options combined, which specify an expression to parse but not
@@ -97,6 +104,7 @@ In the leftmost section of a function's entry in this list, `...` represents the
 - `@dbg_ident{ident}` = prints the Abstract Syntax Tree (AST) construction of the expression associated with the identifier argument `ident`. For example: `x=9; @dbg_ident{x}` would print the same as `@dbg{9}`
 - `@as{type_str, val}` = attempts to cast a value `val` to the type specified by `type_str`: `"string"`, `"real"`, `"complex"`, or `"integer"` (more may be added to this list).
 - `@undef{ident}` = undefines a user-defined variable that was previously defined like `x = 9`. Returns `true` if it succeeded in undefining the variable, `false` if it failed (if the variable was not defined).
+- `@assign{ident, expr}` = evaluate 'expr' and assign the final value to the identifier `ident` (works around the default behavior of associating the expression `expr` with the identifier `ident`, like with `ident = expr`; see [Concepts](#concepts) for more on this).
 
 #### Mathematical Functions
 - `root{b, e}` = returns the `e`th root of `b` (either can be real or complex).
