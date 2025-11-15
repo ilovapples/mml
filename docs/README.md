@@ -1,4 +1,4 @@
-# Syntax Guide for [My Math Lang (MML) (Zig ver.)](https://github.com/ilovapples/mml-zig)
+# Syntax Guide for [My Math Lang (MML) (Zig ver.)](https://github.com/ilovapples/mml)
 
 ### <span id="contents">Contents</span>:
 1. [Concepts](#concepts)
@@ -9,30 +9,32 @@
 ## <span id="concepts">Concepts</span> [↩](#contents)
 MML is a sort of mathematical scripting language with support for several mathematic data types, including real and complex numbers, vectors, and Booleans, with more planned (?) for the future.
 
-There a sort of 'concept' (hence the heading) that needs to be cleared up. In MML, when an expression is assigned to a variable, like `x = 9 + 3`, it is _literally_ assigned to the variable. This is distinct from the behavior of most _programming_
-languages, which would in this situation evaluate the expression and assign the _value_ to the variable, not the expression itself. This decision was made 1. because I didn't have a great plan going into this project, and 2. because I think this 
-behavior better reflects what would observed in an algebraic system. This interesting design allows for things like the following to be allowed (using python highlighting because it might be easier to read):
+There a sort of 'concept' (hence the heading) that needs to be cleared up. In MML, when an expression is assigned to a variable, like `x = 9 + 3`, it is _literally_ assigned to the variable.
+This is distinct from the behavior of most _programming_ languages, which would in this situation evaluate the expression and assign the _value_ to the variable, not the expression itself.
+This decision was made 1. because I didn't have a great plan going into this project, and 2. because I think this behavior better reflects what would observed in an algebraic system.
+This interesting design allows for things like the following to be allowed (using python highlighting because it might be easier to read):
 ```python
 C = (F - 32) * 5/9
 F = 80
 C === 26 + 2/3
 ```
 Notice that `F` wasn't defined before the second line `F = 80`, and yet `C` was well defined by its definition regardless of being dependent on the value of `F`. This also means that, when `F` is changed and `C` is reevaluated, it will reflect
-the new value of `F`, almost as if `C` were a function `C{F}` (functions in this form are planned, but work has not begun just yet).
+the new value of `F`, almost as if `C` were a function `C{F}` ~~(functions in this form are planned, but work has not begun just yet)~~.
 Update: user-defined functions have been implemented in a minimal-ish state! this means we can now do this instead:
 ```python
 C{F} = (F - 32) * 5/9
 C{80} === 26 + 2/3
 ```
 Unfortunately, there is no stack yet, so nested user-defined function calls are not supported (you can't call a user-defined function from within a user-defined function).
-It won't throw an error, but the local variables in each user-defined function call are overwritten each time a user-defined function is called.
+It won't throw an error, but the local variables in each user-defined function call are overwritten each time a user-defined function is called, so it won't do what you expect.
 
-A variable/expression is 'evaluated' when it is used anywhere other than a variable definition or in a vector literal (see [Advanced Syntax](#advanced-syntax) for more on vectors). The interactive prompt (accessed via ~~`-I` or `--interactive`~~ `-R` or `--repl` from
+A variable/expression is 'evaluated' when it is used anywhere other than a variable definition or in a vector literal (see [Advanced Syntax](#advanced-syntax) for more on vectors).
+The interactive prompt (accessed via ~~`-I` or `--interactive`~~ `-R` or `--repl` from
 the executable) automatically evaluates the last expression in each input line, but nothing is automatically evaluated if using the pure library (or the `--expr=` and `--no-eval` options combined, which specify an expression to parse but not
 evaluate).
 
-(Also, I'm not sure if this is the best place to put this, but you can always check the [TODO.md](../TODO.md) for anything that's planned, though the language might be more technical than would be easily understandable. If you're still not sure
-about something, check the [Issues page](https://github.com/ilovapples/mml-zig/issues).)
+(Also, I'm not sure if this is the best place to put this, but you can always check the [TODO.md](../TODO.md) for anything that's planned, though the language used might be more technical than would
+be easily understandable. If you're still not sure about something, check the [Issues page](https://github.com/ilovapples/mml/issues) and hope there's something helpful there)
 
 ## <span id="basic-syntax">Basic Syntax</span> [↩](#contents)
 MML uses the most of the usual syntax for mathematical expressions, as well as a few operators taken from popular programming languages.
@@ -64,7 +66,7 @@ Because it would be a massive pain otherwise, you may specify multiple statement
 ## <span id="advanced-syntax">Advanced Syntax</span> [↩](#contents)
 No, there's no scientific notation yet (it's planned though).
 
-MML also supports the use of vectors of any length (it gets weird if the length is 0, though).
+MML supports the use of vectors of any length (it gets weird if the length is 0, though; this is being worked on).
 A vector may be created via this syntax for a vector literal:
 `[A, B, C, ...]` where there may be a trailing comma following the last element. `[5, 15, 9.2]` is an example.
 The values of a vector may be accessed through the `.` operator, in a zero-indexed fashion, like so: `[5, 15, 9.2].2 == 9.2`
@@ -81,7 +83,8 @@ The `|x|` notation is supported for absolute value and computing vector magnitud
 MML supports complex numbers as well. A complex number can be defined as: `z = 5 + 3i`, where `i` is a built-in constant (see [Built-ins](#built-ins) for other built-in constants) that is multiplied by the number `3` and added to `5`. This was not made possible via any special syntax---really, under the hood, MML just promotes a number to a complex number if it used in an expression with a complex number, so all the example really does is promote `3` to the complex number `3+0i`, multiply it by `i` to create `0+3i`, and add `5` to make `5+3i`, which is assigned to `z` (sort of).
 
 Additionally, built-in functions are provided, though user-defined functions are not yet implemented. Functions are called via this syntax:
-`function_name{argument1, argument2, ...}`. Most functions take just 1 argument, but some take 2 or more. For example: `cos{1.5pi} == 0` (due to rounding errors, this statement evaluates to `false` if the `===` exact equality operator is used: `cos{1.5pi} === 0`).
+`function_name{argument1, argument2, ...}`. Most functions take just 1 argument, but some take 2 or more.
+For example: `cos{1.5pi} == 0` (due to rounding errors, this statement evaluates to `false` if the `===` exact equality operator is used: `cos{1.5pi} === 0`).
 There is a (somewhat confusing) distinction between 'builtin' functions, which are prefixed by `@` (like `@dbg{expr}`), and functions that are built-in, which includes all 'builtin' functions, as well as the rest of the functions provided by default.
 A full catalogue of all provided built-in functions and their properties is available in [Built-ins](#built-ins).
 
@@ -96,8 +99,8 @@ A full catalogue of all provided built-in functions and their properties is avai
 - `nan` = NaN = not a number (error value)
 - `inf` = infinity (can be made negative with `-inf`)
 
-In the leftmost section of a function's entry in this list, `...` represents the possibility for any number of arguments to be passed to a particular function. All functions here take as arguments a real or complex number, unless otherwise specified.
 ### Provided functions (see [Advanced Syntax](#advanced-syntax) for function call syntax):
+In the leftmost section of a function's entry in this list, `...` represents the possibility for any number of arguments to be passed to a particular function. All functions here take as arguments a real or complex number, unless otherwise specified.
 #### Builtin Functions
 - `@dbg{expr}` = prints the Abstract Syntax Tree (AST) construction of an expression `expr`. The expression is not evaluated.
 - `@typeof{val}` = returns as a string the type of the value (which can be any expression, which will be evaluated).
@@ -138,7 +141,7 @@ In the leftmost section of a function's entry in this list, `...` represents the
 #### Other Functions
 - `print{...}` = evaluates and prints the values of its arguments (which may be of any type), separated by spaces, with no newline following the final printed value.
 - `println{...}` = evaluates and prints the value of its arguments (which may be of any type), separated by newlines, with a newline following the final printed value.
-- `sort{v}` = returns a sorted copy of its first argument `v`, a vector (has to be a vector literal, but not for a good reason; I just haven't gotten around to fixing it yet)
+- `sort{v}` = returns a sorted copy of its first argument `v`, a vector
 
 #### Additional functions that may or may not be provided (not provided in this version)
 - `config_set{ident, val}` = sets the value of the configuration option specified by `ident` to `val`. Valid types for `val` depend on the config option specified by `ident`. 

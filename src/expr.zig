@@ -110,6 +110,7 @@ pub const Expr = union(enum) {
                 printIndent(w, indent);
                 try w.writeByte(')');
             },
+            .invalid => try w.writeAll("Invalid"),
             else => try w.writeAll("(null)"),
         }
 
