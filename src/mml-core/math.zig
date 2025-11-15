@@ -36,7 +36,8 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
     try funcs_maps.multiarg_funcs_map.put("sqrt", genMultiArgFuncEntry(std.math.sqrt, complex.sqrt));
     try funcs_maps.multiarg_funcs_map.put("csqrt", genMultiArgFuncEntry(csqrt, complex.sqrt));
 
-    try funcs_maps.multiarg_funcs_map.put("sign", genMultiArgFuncEntry(std.math.sign, complex.sqrt));
+    try funcs_maps.multiarg_funcs_map.put("sign", genMultiArgFuncEntry(std.math.sign, normalize_z));
+    try funcs_maps.multiarg_funcs_map.put("abs", genMultiArgFuncEntry(abs, complex.abs));
 
     try funcs_maps.multiarg_funcs_map.put("conj", genComplexFunc(complex.conj));
     try funcs_maps.multiarg_funcs_map.put("phase", genComplexFunc(complex.arg));
@@ -48,23 +49,29 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
     try funcs_maps.multiarg_funcs_map.put("logb", .{.n_args = 2, .func = &logb});
 }
 
-fn ln(x: anytype) @TypeOf(x) {
+fn ln(x: f64) f64 {
     return std.math.log(f64, std.math.e, x);
 }
-fn log2_c(z: anytype) @TypeOf(z) {
+fn log2_c(z: Complex(f64)) Complex(f64) {
     return complex.log(z).div(complex.log(Complex(f64).init(2, 0)));
 }
-fn log10_c(z: anytype) @TypeOf(z) {
+fn log10_c(z: Complex(f64)) Complex(f64) {
     return complex.log(z).div(complex.log(Complex(f64).init(10, 0)));
 }
-fn csqrt(x: anytype) Complex(f64) {
+fn csqrt(x: f64) Complex(f64) {
     return complex.sqrt(Complex(f64).init(x, 0.0));
 }
-fn real_c(z: anytype) f64 {
+fn real_c(z: Complex(f64)) f64 {
     return z.re;
 }
-fn imag_c(z: anytype) f64 {
+fn imag_c(z: Complex(f64)) f64 {
     return z.im;
+}
+fn abs(x: f64) f64 {
+    return @abs(x);
+}
+fn normalize_z(z: Complex(f64)) Complex(f64) {
+    return z.div(Complex(f64).init(complex.abs(z), 0.0));
 }
 fn root(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     const a = try state.eval(args[0]);

@@ -9,7 +9,6 @@
 - [x] also functions at some point would be good, but they're not a priority
 - [x] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works)
 - [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
-    - [ ] gonna need a lot of enums (or one big one?)
 - [x] fix the error message in ~~[tests/bug1.log](tests/bug1.log)~~
 - [x] add debug output to indicate when parsing and evaluation are complete and how long it took (with `--debug` flag)
 - [x] @undef(ident) builtin to undefine a user-defined identifier
@@ -33,7 +32,7 @@
     - [ ] make `{}` a proper operation on `function`-type expressions.
 - [ ] make argument parser read arguments as they're requested. will help it know how to deal with stuff like '-h 9', where '-h' is a bool option and
       9 shouldn't be considered its value, but is. it's impossible for it to know how to deal with it right now. (partially implemented but not in this repo yet)
-- [ ] fix bug in [tests/bug3.log](tests/bug3.log) (seems to happen with any (or a some) `|x|` where x is a nested vector)
+- [ ] fix bug in [tests/bug3.log](tests/bug3.log) (seems to happen when taking the absolute value of a nested vector)
 - [x] also the annoying bug in [tests/bug4.log](tests/bug4.log). seems like `@dbg_ident` doesn't check that expression passed to it is an identifier
     
 
