@@ -14,18 +14,18 @@ pub fn initConstants(consts_map: *std.StringHashMap(Expr)) !void {
 }
 
 pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
-    try funcs_maps.multiarg_funcs_map.put("print", .{.n_args = 0, .func = &print});
-    try funcs_maps.multiarg_funcs_map.put("println", .{.n_args = 0, .func = &println});
-    try funcs_maps.multiarg_funcs_map.put("sort", .{.n_args = 1, .func = &sort});
+    try funcs_maps.multiarg_funcs_map.put("print", .{ .n_args = 0, .func = &print });
+    try funcs_maps.multiarg_funcs_map.put("println", .{ .n_args = 0, .func = &println });
+    try funcs_maps.multiarg_funcs_map.put("sort", .{ .n_args = 1, .func = &sort });
 
-    try funcs_maps.builtin_funcs_map.put("dbg", .{.n_args = 1, .func = &builtin__dbg});
-    try funcs_maps.builtin_funcs_map.put("dbg_str", .{.n_args = 1, .func = &builtin__dbg_str});
-    try funcs_maps.builtin_funcs_map.put("typeof", .{.n_args = 1, .func = &builtin__typeof});
-    try funcs_maps.builtin_funcs_map.put("dbg_ident", .{.n_args = 1, .func = &builtin__dbg_ident});
-    try funcs_maps.builtin_funcs_map.put("as", .{.n_args = 2, .func = &builtin__as});
-    try funcs_maps.builtin_funcs_map.put("undef", .{.n_args = 1, .func = &builtin__undef});
-    try funcs_maps.builtin_funcs_map.put("help", .{.n_args = 0, .func = &builtin__help});
-    try funcs_maps.builtin_funcs_map.put("assign", .{.n_args = 2, .func = &builtin__assign});
+    try funcs_maps.builtin_funcs_map.put("dbg", .{ .n_args = 1, .func = &builtin__dbg });
+    try funcs_maps.builtin_funcs_map.put("dbg_str", .{ .n_args = 1, .func = &builtin__dbg_str });
+    try funcs_maps.builtin_funcs_map.put("typeof", .{ .n_args = 1, .func = &builtin__typeof });
+    try funcs_maps.builtin_funcs_map.put("dbg_ident", .{ .n_args = 1, .func = &builtin__dbg_ident });
+    try funcs_maps.builtin_funcs_map.put("as", .{ .n_args = 2, .func = &builtin__as });
+    try funcs_maps.builtin_funcs_map.put("undef", .{ .n_args = 1, .func = &builtin__undef });
+    try funcs_maps.builtin_funcs_map.put("help", .{ .n_args = 0, .func = &builtin__help });
+    try funcs_maps.builtin_funcs_map.put("assign", .{ .n_args = 2, .func = &builtin__assign });
 }
 
 fn builtin__dbg(state: *Evaluator, args: []*Expr) EvalError!Expr {
@@ -33,9 +33,7 @@ fn builtin__dbg(state: *Evaluator, args: []*Expr) EvalError!Expr {
     return Expr.init({});
 }
 fn builtin__dbg_str(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    return Expr{
-        .string = try std.fmt.allocPrint(state.arena_alloc, "{f}", .{std.fmt.alt(args[0].*, .printFmt)})
-    };
+    return Expr{ .string = try std.fmt.allocPrint(state.arena_alloc, "{f}", .{std.fmt.alt(args[0].*, .printFmt)}) };
 }
 fn builtin__typeof(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const val = try state.eval(args[0]);
@@ -49,7 +47,7 @@ fn builtin__dbg_ident(state: *Evaluator, args: []*Expr) EvalError!Expr {
     }
 
     const e = state.findIdent(if (arg_0 == .identifier) arg_0.identifier else arg_0.builtin_ident);
-    if (e == null) return Expr{.string = "unknown"};
+    if (e == null) return Expr{ .string = "unknown" };
     e.?.print(state.conf.?.*);
 
     return Expr.init({});
@@ -138,9 +136,9 @@ fn builtin__as(state: *Evaluator, args: []*Expr) EvalError!Expr {
         var writer = std.Io.Writer.fixed(buffer);
         var new_config = state.conf.?.*;
         new_config.writer = &writer;
-        
-        e.printValue(new_config) catch return Expr{.string = buffer};
-        return Expr{.string = buffer[0..writer.end]};
+
+        e.printValue(new_config) catch return Expr{ .string = buffer };
+        return Expr{ .string = buffer[0..writer.end] };
     }
 
     return EvalError.BadOperation;
@@ -150,7 +148,7 @@ fn builtin__undef(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const e = args[0].*;
 
     if (!e.expectType(.identifier, "@undef{ident} takes an identifier")) return EvalError.BadFuncCall;
-    
+
     return Expr.init(state.variable_map.remove(e.identifier));
 }
 

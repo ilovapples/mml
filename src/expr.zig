@@ -41,7 +41,7 @@ pub const Expr = union(enum) {
 
     const Self = @This();
     pub const Kinds = @typeInfo(Expr).@"union".tag_type.?;
-    
+
     /// not very useful for general use, just here so the evaluator code isn't too verbose
     pub fn init(val: anytype) Self {
         return switch (@TypeOf(val)) {
@@ -69,10 +69,10 @@ pub const Expr = union(enum) {
             .operation => {
                 try w.print("Operation(.{t},\n", .{unwrapped_expr.operation.op});
 
-                try Expr.printRecurse(unwrapped_expr.operation.left, conf, indent+4);
+                try Expr.printRecurse(unwrapped_expr.operation.left, conf, indent + 4);
                 if (unwrapped_expr.operation.right) |right| {
                     try w.writeAll(",\n");
-                    try Expr.printRecurse(right, conf, indent+4);
+                    try Expr.printRecurse(right, conf, indent + 4);
                 }
 
                 try w.writeAll(",\n");
@@ -88,7 +88,7 @@ pub const Expr = union(enum) {
             .vector => {
                 try w.print("Vector(n={},\n", .{unwrapped_expr.vector.len});
                 for (unwrapped_expr.vector) |e| {
-                    try Expr.printRecurse(e, conf, indent+4);
+                    try Expr.printRecurse(e, conf, indent + 4);
                     try w.writeAll(",\n");
                 }
                 printIndent(w, indent);
@@ -99,13 +99,10 @@ pub const Expr = union(enum) {
             .func_object => {
                 try w.writeAll("FunctionObject(params=[");
                 for (unwrapped_expr.func_object.params, 0..) |param, i| {
-                    try w.print("'{s}'{s}", .{
-                        param,
-                        if (i == unwrapped_expr.func_object.params.len - 1) "" else ", "
-                    });
+                    try w.print("'{s}'{s}", .{ param, if (i == unwrapped_expr.func_object.params.len - 1) "" else ", " });
                 }
                 try w.writeAll("], body=\n");
-                try Expr.printRecurse(unwrapped_expr.func_object.body, conf, indent+4);
+                try Expr.printRecurse(unwrapped_expr.func_object.body, conf, indent + 4);
                 try w.writeByte('\n');
                 printIndent(w, indent);
                 try w.writeByte(')');
@@ -117,13 +114,13 @@ pub const Expr = union(enum) {
         try w.flush();
     }
     pub fn print(self: *const Self, conf: Config) void {
-       self.printRecurse(conf, 0) catch return;
+        self.printRecurse(conf, 0) catch return;
     }
     pub fn printFmt(self: Self, w: *std.Io.Writer) !void {
-        try self.printRecurse(.{.writer = w}, 0);
+        try self.printRecurse(.{ .writer = w }, 0);
     }
     pub fn printValueFmt(self: Self, w: *std.Io.Writer) !void {
-        self.printValue(.{.writer = w}) catch {};
+        self.printValue(.{ .writer = w }) catch {};
     }
 
     pub fn printValue(self: Self, conf: Config) Evaluator.EvalError!void {
@@ -216,14 +213,14 @@ pub const Expr = union(enum) {
     pub fn expectType(self: Self, kind: Kinds, msg: []const u8) bool {
         if (self == kind) return true;
 
-        std.log.warn("expected '{t}' type, got '{t}': {s}", .{kind, self, msg});
+        std.log.warn("expected '{t}' type, got '{t}': {s}", .{ kind, self, msg });
 
         return false;
     }
 };
 
 fn printIndent(w: *std.Io.Writer, indent: u32) void {
-    w.print("{s: <[1]}", .{"", indent}) catch return;
+    w.print("{s: <[1]}", .{ "", indent }) catch return;
 }
 
 test "expr.getReal" {

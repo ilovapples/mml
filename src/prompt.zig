@@ -26,17 +26,17 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
     const tty_writer = conf.writer;
 
     if (conf.evaluator == null) {
-        std.log.err("The config passed to this function must be supplied with an evaluator, "
-                 ++ "in order to start the prompt.\n", .{});
+        std.log.err("The config passed to this function must be supplied with an evaluator, in order to start the prompt.", .{});
         return 1;
     }
     const eval = conf.evaluator.?;
     const alloc = eval.arena_alloc;
 
     try tty_writer.writeAll(
-        "MML Interactive Prompt 0.1.0 (zig ver.)\n"
-     ++ "Type 'exit' or ctrl+d to quit the prompt\n"
-     ++ "Type 'help' or '@help{}' for help.\n");
+        \\MML Interactive Prompt 0.1.0 (zig ver.)
+        \\Type 'exit' or ctrl+d to quit the prompt
+        \\Type 'help' or '@help{}' for help.
+    );
 
     try tty_writer.writeAll("\x1b[?25l");
     try tty_writer.flush();
@@ -46,12 +46,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
         try tty_writer.flush();
 
         var line_buffer: [line_max_len]u8 = undefined;
-        const line_len = try readLineRaw(
-            tty_reader,
-            tty_writer,
-            &line_buffer,
-            prompt_str,
-        );
+        const line_len = try readLineRaw(tty_reader, tty_writer, &line_buffer, prompt_str);
         if (line_len == null) break;
         if (line_len == 0) {
             try tty_writer.writeByte('\n');
@@ -67,6 +62,8 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
         // BEGIN LINE PARSING & EVALUATION
         const val = blk: {
             const start_parse_time = std.time.nanoTimestamp();
+            defer eval_finished.store(true, AtomicOrder.release);
+
             // parse line into expressions
             const exprs = parse.parseStatements(@ptrCast(@alignCast(eval.arena_alloc.ptr)), line_buffer[0..line_len.?]) catch {
                 eval_finished.store(true, AtomicOrder.release);
@@ -74,28 +71,22 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
             };
             const end_parse_time = std.time.nanoTimestamp();
             if (conf.debug_output) {
-                try tty_writer.print("Parsed in {} ms\n", .{
-                    @divTrunc(end_parse_time - start_parse_time, std.time.ns_per_ms)
-                });
+                try tty_writer.print("Parsed in {} ms\n", .{@divTrunc(end_parse_time - start_parse_time, std.time.ns_per_ms)});
             }
 
             const start_eval_time = std.time.nanoTimestamp();
             // evaluate expressions
-            var val: Expr = .{.invalid = {}};
+            var val: Expr = .{ .invalid = {} };
             for (exprs) |e| {
-                val = eval.eval(e) catch .{.invalid = {}};
+                val = eval.eval(e) catch .{ .invalid = {} };
             }
             const end_eval_time = std.time.nanoTimestamp();
             if (conf.debug_output) {
-                try tty_writer.print("\rEvaluated in {} ms\n", .{
-                    @divTrunc(end_eval_time - start_eval_time, std.time.ns_per_ms)
-                });
+                try tty_writer.print("\rEvaluated in {} ms\n", .{@divTrunc(end_eval_time - start_eval_time, std.time.ns_per_ms)});
             }
 
-            eval_finished.store(true, AtomicOrder.release);
             break :blk val;
         };
-
 
         if (val == .code) {
             switch (val.code) {
@@ -148,7 +139,7 @@ fn readLineRaw(reader: *std.fs.File.Reader, stdout: *Io.Writer, out: []u8, promp
         const c = r.takeByte() catch return null;
 
         const seq_is_empty = seq_pos == 0;
-        const second_char_is_correct = 
+        const second_char_is_correct =
             (seq_pos == 1 and c == '[') or
             (seq_pos > 1 and seq[1] == '[') or
             (seq_pos == 1 and (c == 'b' or c == 'f'));
@@ -170,7 +161,7 @@ fn readLineRaw(reader: *std.fs.File.Reader, stdout: *Io.Writer, out: []u8, promp
                 continue;
             }
 
-            if (seq_pos >= seq.len-1) seq_pos = 1;
+            if (seq_pos >= seq.len - 1) seq_pos = 1;
             continue;
         }
 
@@ -215,16 +206,16 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
     } else if (std.mem.eql(u8, seq, START_ANSI ++ RIGHT_C)) { // if RIGHT
         if (cursor.* < line_len.*) cursor.* += 1; // go right
     } else if (std.mem.eql(u8, seq, ALT_LEFT) // if ALT+LEFT
-            or std.mem.eql(u8, seq, ALT_ANSI ++ LEFT_C) // or ALT+LEFT (other test)
-            or std.mem.eql(u8, seq, CTRL_ANSI ++ LEFT_C)) { // or CTRL+LEFT
+    or std.mem.eql(u8, seq, ALT_ANSI ++ LEFT_C) // or ALT+LEFT (other test)
+    or std.mem.eql(u8, seq, CTRL_ANSI ++ LEFT_C)) { // or CTRL+LEFT
         cursor.* = 0; // go all the way left
     } else if (std.mem.eql(u8, seq, ALT_RIGHT) // if ALT+RIGHT
-            or std.mem.eql(u8, seq, ALT_ANSI ++ RIGHT_C) // or ALT+RIGHT (other test)
-            or std.mem.eql(u8, seq, CTRL_ANSI ++ RIGHT_C)) { // or CTRL+RIGHT
+    or std.mem.eql(u8, seq, ALT_ANSI ++ RIGHT_C) // or ALT+RIGHT (other test)
+    or std.mem.eql(u8, seq, CTRL_ANSI ++ RIGHT_C)) { // or CTRL+RIGHT
         cursor.* = line_len.*; // go all the way right
     } else if (std.mem.eql(u8, seq, START_ANSI ++ "3~")) { // if DEL
         if (line_len.* > cursor.*) {
-            @memmove(line + cursor.*, line[cursor.* + 1..line_len.*]);
+            @memmove(line + cursor.*, line[cursor.* + 1 .. line_len.*]);
             line_len.* -= 1;
         } else if (line_len.* > 0) {
             line_len.* -= 1;
@@ -234,7 +225,7 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
         if (history_used == 0) return false;
 
         if (history_pos == null or history_pos.? == 0) {
-            history_pos = history_used-1;
+            history_pos = history_used - 1;
         } else {
             history_pos.? -= 1;
         }
@@ -276,7 +267,7 @@ fn insertChar(line: []u8, cursor: *usize, line_len: *usize, c: u8) void {
 }
 
 fn dotDotDotThread(w: *Io.Writer, eval_finished: *const std.atomic.Value(bool)) void {
-    std.Thread.sleep(1*std.time.ns_per_ms);
+    std.Thread.sleep(1 * std.time.ns_per_ms);
 
     var step: u2 = 1;
     while (!eval_finished.load(AtomicOrder.acquire)) : (step +%= 1) {

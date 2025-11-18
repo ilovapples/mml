@@ -11,13 +11,20 @@ pub const TokenType = enum(u32) {
     OpPow,
     OpRoot,
 
-    OpMul, OpDiv, OpMod,
-    OpAdd, OpSub,
+    OpMul,
+    OpDiv,
+    OpMod,
+    OpAdd,
+    OpSub,
 
-    OpLess, OpGreater,
-    OpLessEq, OpGreaterEq,
-    OpEq, OpNotEq,
-    OpExactEq, OpExactNotEq,
+    OpLess,
+    OpGreater,
+    OpLessEq,
+    OpGreaterEq,
+    OpEq,
+    OpNotEq,
+    OpExactEq,
+    OpExactNotEq,
 
     OpAssertEqual,
 
@@ -25,7 +32,7 @@ pub const TokenType = enum(u32) {
     OpNegate,
     OpUnaryNothing,
     OpTilde,
-    // marker token for the end of the operators (used in isOp() and friends)
+    /// marker entry for the end of the operators (used in isOp() and friends). isn't an actual operator/token
     NotOp,
 
     // non-operator tokens
@@ -99,7 +106,7 @@ pub const TokenType = enum(u32) {
             .OpGreaterEq => "'>='",
             .OpEq => "'=='",
             .OpNotEq => "'!='",
-            .OpExactEq=> "'==='",
+            .OpExactEq => "'==='",
             .OpExactNotEq => "'!=='",
             .OpAssertEqual => "'='",
             .OpNot => "!x",
@@ -142,11 +149,9 @@ pub const Token = struct {
 
     /// construct a token from a string (primary function to construct a token)
     pub fn from(string: []const u8, tic: TokenInitConfig) Token {
-        return if (string.len == 0) .{.string = string, .type = .Eof} else switch (string[0]) {
+        return if (string.len == 0) .{ .string = string, .type = .Eof } else switch (string[0]) {
             // single character operator/syntax tokens
-            '.', '^', '+', '-', '*', '/', '%',
-            '(', ')', '{', '}', '[', ']', ',', ';',
-            '|', '~' => .{.string = string[0..1], .type = toktype_by_char[string[0]]},
+            '.', '^', '+', '-', '*', '/', '%', '(', ')', '{', '}', '[', ']', ',', ';', '|', '~' => .{ .string = string[0..1], .type = toktype_by_char[string[0]] },
 
             // relational operators
             '<', '>' => if (string.len > 1 and string[1] == '=') .{
@@ -156,24 +161,24 @@ pub const Token = struct {
                     '>' => .OpGreaterEq,
                     else => .Invalid,
                 },
-            } else .{.string = string[0..1], .type = toktype_by_char[string[0]]},
+            } else .{ .string = string[0..1], .type = toktype_by_char[string[0]] },
 
             // equality operators
             '=', '!' => blk: {
                 if ((string.len > 1 and string[1] != '=') or string.len == 1) {
-                    break :blk .{.string = string[0..1], .type = toktype_by_char[string[0]]};
+                    break :blk .{ .string = string[0..1], .type = toktype_by_char[string[0]] };
                 } else if (string.len > 2 and string[2] != '=') {
-                    break :blk .{.string = string[0..2], .type = switch (string[0]) {
+                    break :blk .{ .string = string[0..2], .type = switch (string[0]) {
                         '=' => .OpEq,
                         '!' => .OpNotEq,
                         else => .Invalid,
-                    }};
+                    } };
                 } else {
-                    break :blk .{.string = string[0..3], .type = switch (string[0]) {
+                    break :blk .{ .string = string[0..3], .type = switch (string[0]) {
                         '=' => .OpExactEq,
                         '!' => .OpExactNotEq,
                         else => .Invalid,
-                    }};
+                    } };
                 }
             },
 
@@ -192,28 +197,28 @@ pub const Token = struct {
 
                 // consume scientific form section
                 if ((string[end_i] == 'e' or string[end_i] == 'E') and !tic.looking_for_int) {
-                    if (end_i == string.len-1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
+                    if (end_i == string.len - 1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
                     end_i += 1;
                     if (string[end_i] == '+' or string[end_i] == '-') {
-                        if (end_i == string.len-1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
+                        if (end_i == string.len - 1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
                         end_i += 1;
                     }
-                    end_i = std.mem.indexOfNonePos(u8, string, end_i+1, digits ++ "_") orelse
+                    end_i = std.mem.indexOfNonePos(u8, string, end_i + 1, digits ++ "_") orelse
                         break :blk .{ .string = string, .type = .Number };
                 }
 
-                break :blk .{.string = string[0..end_i], .type = .Number};
+                break :blk .{ .string = string[0..end_i], .type = .Number };
             },
-            
+
             // normal identifiers (ex. 'x', 'a', 'ba_9')
             'a'...'z', 'A'...'Z', '_' => blk: {
                 var index: usize = std.mem.indexOfNonePos(u8, string, 1, "_" ++ std.ascii.letters ++ digits) orelse
                     break :blk .{ .string = string, .type = .Ident };
                 while (index < string.len and
-                    (std.ascii.isAlphanumeric(string[index]) or string[index] == '_'))
-                    : (index += 1) {}
+                    (std.ascii.isAlphanumeric(string[index]) or string[index] == '_')) : (index += 1)
+                {}
 
-                break :blk .{.string = string[0..index], .type = .Ident};
+                break :blk .{ .string = string[0..index], .type = .Ident };
             },
 
             // builtin identifiers (ex. '@dbg')
@@ -221,27 +226,27 @@ pub const Token = struct {
                 if (string.len == 1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
 
                 if (string[1] != '_' and !std.ascii.isAlphabetic(string[1])) {
-                    break :blk .{.string = string, .type = .Invalid };
+                    break :blk .{ .string = string, .type = .Invalid };
                 }
                 var index: usize = 2;
                 while (index < string.len and
-                    (std.ascii.isAlphanumeric(string[index]) or string[index] == '_'))
-                    : (index += 1) {}
+                    (std.ascii.isAlphanumeric(string[index]) or string[index] == '_')) : (index += 1)
+                {}
 
-                break :blk .{.string = string[1..index], .type = .BuiltinIdent};
+                break :blk .{ .string = string[1..index], .type = .BuiltinIdent };
             },
 
             // strings (ex. '"hello"')
             '"' => blk: {
                 var index: usize = 1;
-                while (index < string.len and string[index] != '"') : (index += 1) { }
+                while (index < string.len and string[index] != '"') : (index += 1) {}
                 if (index == string.len) {
                     std.log.err("unterminated string literal", .{});
-                    break :blk .{.string = string, .type = .Invalid};
+                    break :blk .{ .string = string, .type = .Invalid };
                 }
-                break :blk .{.string = string[0..index+1], .type = .String};
+                break :blk .{ .string = string[0 .. index + 1], .type = .String };
             },
-            
+
             else => .{ .string = &.{}, .type = .InvalidCharacter },
         };
     }
@@ -251,7 +256,7 @@ pub const Token = struct {
         self: Token,
         w: *std.Io.Writer,
     ) !void {
-        try w.print("{{ \"{s}\", .{t} }}", .{self.string, self.type});
+        try w.print("{{ \"{s}\", .{t} }}", .{ self.string, self.type });
     }
 };
 
@@ -269,7 +274,6 @@ test "token.opSuite" {
     try expect(!Token.from("!", .{}).type.isBinaryOp());
     try expect(Token.from("^  ", .{}).type.isRightAssocOp());
 }
-
 
 pub const toktype_by_char = [_]TokenType{
     .Eof, // 0x00
@@ -305,7 +309,6 @@ pub const toktype_by_char = [_]TokenType{
     .InvalidCharacter,
     .InvalidCharacter,
     .Whitespace, // 0x20
-
     .OpNot, // 0x21
     .Dquote,
     .InvalidCharacter, // hashtag '#'
@@ -401,7 +404,6 @@ pub const toktype_by_char = [_]TokenType{
     .CloseBrace,
     .OpTilde,
     .InvalidCharacter, // 0x7f
-
     .InvalidCharacter, // 0x80 onwards
     .InvalidCharacter,
     .InvalidCharacter,

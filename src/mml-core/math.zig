@@ -44,9 +44,9 @@ pub fn initFuncs(funcs_maps: Evaluator.FuncsStruct) !void {
     try funcs_maps.multiarg_funcs_map.put("real", genComplexFunc(real_c));
     try funcs_maps.multiarg_funcs_map.put("imag", genComplexFunc(imag_c));
 
-    try funcs_maps.multiarg_funcs_map.put("root", .{.n_args = 2, .func = &root});
-    try funcs_maps.multiarg_funcs_map.put("atan2", .{.n_args = 2, .func = &atan2});
-    try funcs_maps.multiarg_funcs_map.put("logb", .{.n_args = 2, .func = &logb});
+    try funcs_maps.multiarg_funcs_map.put("root", .{ .n_args = 2, .func = &root });
+    try funcs_maps.multiarg_funcs_map.put("atan2", .{ .n_args = 2, .func = &atan2 });
+    try funcs_maps.multiarg_funcs_map.put("logb", .{ .n_args = 2, .func = &logb });
 }
 
 fn ln(x: f64) f64 {
@@ -84,12 +84,8 @@ fn atan2(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     const y = try state.eval(args[0]);
     const x = try state.eval(args[1]);
     if (y != .real_number or x != .real_number) {
-        Evaluator.warnBadFuncArgument(
-            "atan2",
-            if (y != .real_number) 0 else 1,
-            &correct_arg_types,
-            @tagName(if (y != .real_number) y else x));
-        return Expr{.invalid={}};
+        Evaluator.warnBadFuncArgument("atan2", if (y != .real_number) 0 else 1, &correct_arg_types, @tagName(if (y != .real_number) y else x));
+        return Expr{ .invalid = {} };
     }
 
     return Expr.init(std.math.atan2(y.real_number, x.real_number));
@@ -97,14 +93,10 @@ fn atan2(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
 fn logb(state: *Evaluator, args: []*Expr) Evaluator.EvalError!Expr {
     const a = try state.eval(args[0]);
     const b = try state.eval(args[1]);
-    const correct_arg_types = [_]Expr.Kinds{.real_number, .complex_number, .boolean};
+    const correct_arg_types = [_]Expr.Kinds{ .real_number, .complex_number, .boolean };
     if (!a.isNumber() or !b.isNumber()) {
-        Evaluator.warnBadFuncArgument(
-            "logb",
-            if (!a.isNumber()) 0 else 1,
-            &correct_arg_types,
-            @tagName(if (!a.isNumber()) a else b));
-        return Expr{.invalid={}};
+        Evaluator.warnBadFuncArgument("logb", if (!a.isNumber()) 0 else 1, &correct_arg_types, @tagName(if (!a.isNumber()) a else b));
+        return Expr{ .invalid = {} };
     }
 
     if (a.isComplex() or b.isComplex()) {
@@ -125,7 +117,7 @@ fn genMultiArgFuncEntry(f: anytype, cf: anytype) Evaluator.MultiArgFuncEntry {
                 } else if (val == .complex_number) {
                     return Expr.init(cf(val.complex_number));
                 }
-                return Expr{.invalid={}};
+                return Expr{ .invalid = {} };
             }
         }.wrapper,
     };
@@ -139,7 +131,7 @@ fn genRealFunc(f: anytype) Evaluator.MultiArgFuncEntry {
                 if (val == .real_number) {
                     return Expr.init(f(val.real_number));
                 }
-                return Expr{.invalid={}};
+                return Expr{ .invalid = {} };
             }
         }.wrapper,
     };
@@ -153,7 +145,7 @@ fn genComplexFunc(cf: anytype) Evaluator.MultiArgFuncEntry {
                 if (val == .complex_number) {
                     return Expr.init(cf(val.complex_number));
                 }
-                return Expr{.invalid={}};
+                return Expr{ .invalid = {} };
             }
         }.wrapper,
     };

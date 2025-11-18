@@ -19,7 +19,6 @@ pub fn build(b: *Build) void {
         .optimize = optimize,
     });
 
-
     const libmml_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -59,7 +58,6 @@ pub fn build(b: *Build) void {
     const run_step = b.step("run", "run executable after building");
     run_step.dependOn(&run_main.step);
 
-
     const mod_tests = b.addTest(.{
         .root_module = libmml_mod,
     });
@@ -71,9 +69,6 @@ pub fn build(b: *Build) void {
     test_step.dependOn(&run_mod_tests.step);
 }
 
-fn installArtifactOptions(
-    b: *Build,
-    artifact: *Build.Step.Compile,
-    options: Build.Step.InstallArtifact.Options) void {
+fn installArtifactOptions(b: *Build, artifact: *Build.Step.Compile, options: Build.Step.InstallArtifact.Options) void {
     b.getInstallStep().dependOn(&b.addInstallArtifact(artifact, options).step);
 }

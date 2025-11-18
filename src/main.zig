@@ -113,8 +113,7 @@ pub fn main() !void {
         try stdout_w.writeAll("\x1b[0 q\x1b[?25h");
         try stdout_w.flush();
 
-        if (res != 0) std.process.exit(1)
-            else return;
+        if (res != 0) std.process.exit(1) else return;
     }
 
     // parsing & evaluating
@@ -123,9 +122,9 @@ pub fn main() !void {
         return;
     };
 
-    var val: Expr = .{.invalid = {}};
+    var val: Expr = .{ .invalid = {} };
     for (exprs) |e| {
-        val = eval.eval(e) catch .{.invalid = {}};
+        val = eval.eval(e) catch .{ .invalid = {} };
     }
     try val.printValue(conf);
 

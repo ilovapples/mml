@@ -29,12 +29,9 @@ const ParserState = struct {
 
     pub fn peekToken(self: *Self) Token {
         // skip whitespace
-        const next_char_after_whitespace = std.mem.indexOfNonePos(
-            u8, self.string, self.cur_pos, &std.ascii.whitespace);
+        const next_char_after_whitespace = std.mem.indexOfNonePos(u8, self.string, self.cur_pos, &std.ascii.whitespace);
 
-        self.peeked_token = Token.from(
-            self.string[next_char_after_whitespace orelse self.string.len..],
-            .{.looking_for_int = self.looking_for_int});
+        self.peeked_token = Token.from(self.string[next_char_after_whitespace orelse self.string.len ..], .{ .looking_for_int = self.looking_for_int });
         return self.peeked_token.?;
     }
 
@@ -77,11 +74,9 @@ const ParserState = struct {
             if (self.peekToken().type == .OpenBrace) { // function call
                 const name_expr = try alloc.create(Expr);
                 if (tok.type == .Ident) {
-                    name_expr.* = @unionInit(Expr, "identifier",
-                        try alloc.dupe(u8, tok.string));
+                    name_expr.* = @unionInit(Expr, "identifier", try alloc.dupe(u8, tok.string));
                 } else {
-                    name_expr.* = @unionInit(Expr, "builtin_ident", 
-                        try alloc.dupe(u8, tok.string));
+                    name_expr.* = @unionInit(Expr, "builtin_ident", try alloc.dupe(u8, tok.string));
                 }
 
                 left.* = @unionInit(Expr, "operation", .{
@@ -139,9 +134,10 @@ const ParserState = struct {
                 tok = self.nextToken();
                 if (tok.type != .CloseBracket and tok.type != .Comma) {
                     // maybe I should use zig error unions for this kind of thing...
-                    std.log.err("unexpected token .{t} ({s}) found after element in vector "
-                             ++ "literal (expected .CloseBracket (']') or .Comma (','))", .{
-                        tok.type, tok.type.stringify().? });
+                    std.log.err(
+                        "unexpected token .{t} ({s}) found after element in vector literal (expected .CloseBracket (']') or .Comma (','))",
+                        .{ tok.type, tok.type.stringify().? },
+                    );
 
                     return ParseError.UnterminatedVectorLiteral;
                 }
@@ -150,7 +146,7 @@ const ParserState = struct {
             left.* = @unionInit(Expr, "vector", try temp_arrlist.toOwnedSlice(alloc));
         } else if (tok.type == .Pipe) {
             if (self.peekToken().type == .Pipe) {
-                std.log.err("expected expression in pipe block ({s})", .{ TokenType.Pipe.stringify().? });
+                std.log.err("expected expression in pipe block ({s})", .{TokenType.Pipe.stringify().?});
                 return ParseError.ExpectedExpr;
             }
 
@@ -177,16 +173,13 @@ const ParserState = struct {
             if (self.looking_for_int) {
                 left.* = @unionInit(Expr, "integer", std.fmt.parseInt(i64, tok.string, 10) catch |e| blk: switch (e) {
                     std.fmt.ParseIntError.Overflow => {
-                        std.log.warn("integer read as '{s}' has a magnitude "
-                                 ++ "larger than about 9.2 quintillion (2^63). "
-                                 ++ "assuming infinity.", .{tok.string});
+                        std.log.warn("integer read as '{s}' has a magnitude " ++ "larger than about 9.2 quintillion (2^63). " ++ "assuming infinity.", .{tok.string});
                         break :blk std.math.maxInt(i64);
                     },
                     std.fmt.ParseIntError.InvalidCharacter => {
                         // if this is reached, it means either std.fmt and I disagree on what counts as an integer, or I did my checking wrong
                         @branchHint(.cold);
-                        std.log.warn("failed to read '{s}' as an integer. "
-                                 ++ "assuming 0.", .{tok.string});
+                        std.log.warn("failed to read '{s}' as an integer. " ++ "assuming 0.", .{tok.string});
                         break :blk 0;
                     },
                 });
@@ -194,15 +187,13 @@ const ParserState = struct {
                 left.* = @unionInit(Expr, "real_number", std.fmt.parseFloat(f64, tok.string) catch blk: {
                     // if this is reached, it means either std.fmt and I disagree on what counts as a number, or I did my checking wrong
                     @branchHint(.cold);
-                    std.log.warn("failed to read '{s}' as a real number. "
-                             ++ "assuming NaN (not a number).", .{tok.string});
+                    std.log.warn("failed to read '{s}' as a real number. " ++ "assuming NaN (not a number).", .{tok.string});
                     break :blk std.math.nan(f64);
                 });
             }
             self.looking_for_int = false;
         } else if (tok.type == .String) {
-            left.* = @unionInit(Expr, "string", 
-                try alloc.dupe(u8, tok.string[1..tok.string.len-1]));
+            left.* = @unionInit(Expr, "string", try alloc.dupe(u8, tok.string[1 .. tok.string.len - 1]));
         } else {
             std.log.err("null expression. found token .{t} ({s})", .{ tok.type, tok.type.stringify().? });
             return ParseError.NullExpr;
@@ -244,10 +235,9 @@ const ParserState = struct {
 
             left = opnode;
         }
-        
+
         return left;
     }
-
 };
 pub fn parseExpr(arena: *ArenaAllocator, str: []const u8) !*Expr {
     var state = ParserState.init(arena, str);
@@ -331,18 +321,13 @@ pub const operator_precedence = [_]u8{
     1, // OpFuncCall,
     1, // OpDot,
     1, // OpAt,
-
     2, // OpPow,
     2, // OpRoot,
-
     3, 3, 3, // OpMul, OpDiv, OpMod,
     4, 4, // OpAdd, OpSub,
-
     6, 6, 6, 6, // OpLess, OpGreater, OpLessEq, OpGreaterEq,
     7, 7, // OpEq, OpNotEq,
     7, 7, // OpExactEq, OpExactNotEq,
-
     14, // OpAssertEqual,
-
     2, 2, 2, 2, // OpNot, OpNegate, OpUnaryNothing, OpTilde
 };

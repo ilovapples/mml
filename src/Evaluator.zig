@@ -186,10 +186,9 @@ fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
 
         if (state.locals_map) |*lm| lm.deinit();
         state.locals_map = .init(state.arena_alloc);
-        
+
         if (args.len != fo.params.len) {
-            std.log.err("expected {d} argument(s), got {d}; in call to user-defined function '{s}'",
-                .{ fo.params.len, args.len, func_ident.identifier });
+            std.log.err("expected {d} argument(s), got {d}; in call to user-defined function '{s}'", .{ fo.params.len, args.len, func_ident.identifier });
             return EvalError.BadFuncCall;
         }
 
@@ -203,8 +202,7 @@ fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
     if (func_ident == .builtin_ident) {
         if (builtin_funcs_map.get(func_ident.builtin_ident)) |func| {
             if (func.n_args > 0 and func.n_args != args.len) {
-                std.log.err("expected {} argument(s), got {}; in call to builtin function `@{s}`",
-                    .{ func.n_args, args.len, func_ident.builtin_ident });
+                std.log.err("expected {} argument(s), got {}; in call to builtin function `@{s}`", .{ func.n_args, args.len, func_ident.builtin_ident });
                 return EvalError.WrongArgumentCount;
             }
             return try func.func(state, args);
