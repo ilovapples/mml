@@ -266,7 +266,7 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
                     .vector => blk: {
                         var sum: f64 = 0.0;
                         for (left.vector) |e| {
-                            sum += (try state.eval(e)).getComplex().squaredMagnitude();
+                            sum += (try state.applyOp(try state.eval(e), null, .Pipe)).getComplex().squaredMagnitude();
                         }
                         const magnitude = @sqrt(sum);
                         break :blk Expr.init(magnitude);
