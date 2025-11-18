@@ -116,6 +116,7 @@ In the leftmost section of a function's entry in this list, `...` represents the
 #### Builtin Functions
 (these must be prefixed with `@`)
 - `@dbg{expr}` = prints the Abstract Syntax Tree (AST) construction of an expression `expr`. The expression is not evaluated.
+- `@dbg_str{expr}` = same as `@dbg{expr}`, but returns a string of the output instead of just writing it to the terminal
 - `@typeof{val}` = returns as a string the type of the value (which can be any expression, which will be evaluated).
 - `@dbg_ident{ident}` = prints the Abstract Syntax Tree (AST) construction of the expression associated with the identifier argument `ident`. For example: `x=9; @dbg_ident{x}` would print the same as `@dbg{9}`
 - `@as{type_str, val}` = attempts to cast a value `val` to the type specified by `type_str`: `"string"`, `"real"`, `"complex"`, or `"integer"` (more may be added to this list).
