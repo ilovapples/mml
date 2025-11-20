@@ -73,7 +73,7 @@ pub fn deinit(self: *Self) void {
 pub const EvalError = error{
     NoLastValue,
     UndefinedIdentifier,
-    RecursiveDefinitionError,
+    CircularDefinitionError,
     WrongArgumentCount,
     NonIntegerVectorIndex,
     OutOfBoundsIndex,
@@ -121,12 +121,14 @@ fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
 
     if (e.operation.op == .OpAssertEqual and left != null and right != null) {
         if (left.?.* == .identifier) {
-            if (right.?.searchFor(.{left.?.*.identifier}, containsIdentCheck)) |_| {
-                std.log.err("recursive dependency found in definition of '{s}'", .{left.?.identifier});
-                return EvalError.RecursiveDefinitionError;
+            if (right.?.dependsOn(state, left.?.identifier)) {
+                std.log.err("circular dependency found in definition of '{s}'", .{left.?.identifier});
+                return EvalError.CircularDefinitionError;
             }
             try state.variable_map.put(left.?.identifier, right.?);
-            return state.evalRecurse(right.?);
+            if (state.conf) |c| {
+                if (c.assign_returns_nothing) return Expr.init({});
+            } else return state.evalRecurse(right.?);
         } else if (left.?.* == .operation and left.?.operation.op == .OpFuncCall and
             left.?.operation.left.?.* == .identifier and left.?.operation.right.?.* == .vector)
         {
@@ -499,6 +501,9 @@ pub fn findIdent(state: *Self, ident: []const u8) ?Expr {
     if (std.mem.eql(u8, ident, "ans")) return state.last_val;
     if (constants_map.get(ident)) |e| return e;
     if (state.variable_map.get(ident)) |e| return e.*;
+    if (state.locals_map) |lm| {
+        if (lm.get(ident)) |e| return e.*;
+    }
 
     return null;
 }

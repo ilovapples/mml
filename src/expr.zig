@@ -210,6 +210,35 @@ pub const Expr = union(enum) {
         return null;
     }
 
+    pub fn containsIdent(self: Self, ident: []const u8) bool {
+        return self == .identifier and std.mem.eql(u8, self.identifier, ident);
+    }
+
+    pub fn dependsOn(self: Self, eval_state: *Evaluator, ident: []const u8) bool {
+        if (self.containsIdent(ident)) return true;
+
+        switch (self) {
+            .identifier => if (eval_state.findIdent(self.identifier)) |dep| {
+                if (dep.dependsOn(eval_state, ident)) return true;
+            },
+            .operation => {
+                if (self.operation.left.?.dependsOn(eval_state, ident)) {
+                    return true;
+                }
+                if (self.operation.right) |e| {
+                    if (e.dependsOn(eval_state, ident)) return true;
+                }
+            },
+            .vector => return for (self.vector) |e| {
+                if (e.dependsOn(eval_state, ident)) break true;
+            } else false,
+            else => {},
+        }
+
+        return false;
+        // doesn't quite work yet
+    }
+
     pub fn expectType(self: Self, kind: Kinds, msg: []const u8) bool {
         if (self == kind) return true;
 

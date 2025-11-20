@@ -70,6 +70,7 @@ pub fn main() !void {
     conf.bools_print_as_nums = pa.option(bool, "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
     conf.decimal_precision = pa.option(u32, "precision", "(WARNING: unused) precision to use when displaying decimals") orelse 6;
     conf.quote_strings = pa.option(bool, "quote-strings", "if set, strings print surrounded by double quotes") orelse false;
+    conf.assign_returns_nothing = pa.option(bool, "assign-returns-nothing", "if set, assignment with '=' does not automatically evaluate the right side") orelse false;
 
     const mml_consts_opt = pa.option(bool, "mml-consts", "display list of provided constants in MML") orelse false;
     const mml_funcs_opt = pa.option(bool, "mml-funcs", "display list of provided functions in MML") orelse false;

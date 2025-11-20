@@ -57,6 +57,6 @@
 - [x] ~~add Type type so I can add a `cast{type, val}` function~~ we're just using strings for those (check out `ExprType` in `builtin_as` in `src/mml-core/stdmml.zig`), might change though
 - [x] fix prompt so it reads data in 1 byte minimum chunks (now it's 8 bytes for one character read,
       so stdin doesn't work unless you're currently the one using the prompt via shell input or something)
-- [ ] add check for recursive variable definition (currently segfaults from stack overflow)
+- [x] add check for recursive variable definition (currently segfaults from stack overflow)
 - [x] support scientific notation in floating constants
 - [x] support underscore separators in numerical constants

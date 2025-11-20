@@ -13,5 +13,6 @@ writer: *std.Io.Writer,
 decimal_precision: u32 = 6, // unused
 bools_print_as_nums: bool = false,
 quote_strings: bool = false,
+assign_returns_nothing: bool = false,
 
 debug_output: bool = false,
