@@ -225,7 +225,7 @@ fn handleEscapeSequence(seq: []u8, line: [*]u8, line_len: *usize, cursor: *usize
         if (history_used == 0) return false;
 
         if (history_pos == null or history_pos.? == 0) {
-            history_pos = history_used - 1;
+            history_pos = (history_used - 1) % history_buffer.len;
         } else {
             history_pos.? -= 1;
         }
