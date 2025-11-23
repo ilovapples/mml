@@ -82,11 +82,16 @@ pub const EvalError = error{
     InvalidExpression,
     BadConfiguration,
 } || Allocator.Error;
-fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
+pub const Options = struct {
+    find_idents: bool = true,
+};
+fn evalRecurse(state: *Self, e: *const Expr, options: Options) EvalError!Expr {
     switch (e.*) {
         .invalid => return EvalError.InvalidExpression,
         .vector, .integer, .real_number, .complex_number, .boolean, .string, .func_object, .nothing => return e.*,
         .identifier, .builtin_ident => {
+            if (!options.find_idents) return e.*;
+
             const ident = if (e.* == .identifier) e.identifier else e.builtin_ident;
             if (e.* == .builtin_ident and std.mem.eql(u8, ident, "ans")) {
                 return state.last_val orelse EvalError.NoLastValue;
@@ -96,12 +101,13 @@ fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
             }
 
             if (e.* != .builtin_ident) {
-                if (state.variable_map.get(ident)) |ie| {
-                    return state.evalRecurse(ie);
-                } else if (state.locals_map != null) {
+                if (state.locals_map != null) {
                     if (state.locals_map.?.get(ident)) |ie| {
-                        return state.evalRecurse(ie);
+                        return state.evalRecurse(ie, options);
                     }
+                }
+                if (state.variable_map.get(ident)) |ie| {
+                    return state.evalRecurse(ie, options);
                 }
             }
 
@@ -131,7 +137,7 @@ fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
             if (state.conf) |c| {
                 if (c.assign_returns_nothing) return Expr.init({});
             }
-            return state.evalRecurse(right.?);
+            return state.evalRecurse(right.?, options);
         } else if (left.?.* == .operation and left.?.operation.op == .OpFuncCall and
             left.?.operation.left.?.* == .identifier and left.?.operation.right.?.* == .vector)
         {
@@ -168,20 +174,37 @@ fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
             return EvalError.BadFuncCall;
         }
 
-        const right_val_vec = try state.evalRecurse(right.?);
+        const right_val_vec = try state.evalRecurse(right.?, options);
         return try state.applyFunc(left.?.*, right_val_vec.vector);
+    } else if (e.operation.op == .OpEvalAssign) {
+        if (left == null or right == null or left.?.* != .identifier) {
+            return EvalError.BadOperation;
+        }
+
+        const new_expr = try state.allocs.expr_pool.create();
+        new_expr.* = try state.evalRecurse(right.?, options);
+        try state.variable_map.put(left.?.identifier, new_expr);
+
+        if (state.conf) |c| {
+            if (c.assign_returns_nothing) return Expr.init({});
+        }
+        return new_expr.*;
     }
 
     return try state.applyOp(
-        try state.evalRecurse(left.?),
-        if (right) |r| try state.evalRecurse(r) else null,
+        try state.evalRecurse(left.?, options),
+        if (right) |r| try state.evalRecurse(r, options) else null,
         e.operation.op,
     );
 }
 
-pub fn eval(state: *Self, e: *const Expr) !Expr {
-    state.last_val = try state.evalRecurse(e);
+pub fn evalOptions(state: *Self, e: *const Expr, options: Options) !Expr {
+    state.last_val = try state.evalRecurse(e, options);
     return state.last_val.?;
+}
+
+pub fn eval(state: *Self, e: *const Expr) !Expr {
+    return state.evalOptions(e, .{});
 }
 
 fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
@@ -460,6 +483,12 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
                 warnBadOperation(op, left, right);
                 return EvalError.BadOperation;
             },
+        }
+    } else if (left == .nothing and right == .nothing) {
+        if (op.isEqOp()) {
+            return Expr.init(true);
+        } else {
+            if (op.isNotEqOp()) return Expr.init(false);
         }
     }
 

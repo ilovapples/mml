@@ -8,6 +8,8 @@ const Evaluator = mml.Evaluator;
 const EvalError = Evaluator.EvalError;
 
 pub fn initConstants(consts_map: *std.StringHashMap(Expr)) !void {
+    //try consts_map.put("nothing", Expr{ .nothing = {} });
+
     try consts_map.put("exit", Expr{ .code = Expr.Code.Exit });
     try consts_map.put("clear", Expr{ .code = Expr.Code.ClearScreen });
     try consts_map.put("help", Expr{ .code = Expr.Code.Help });
@@ -46,7 +48,7 @@ fn builtin__typeof(state: *Evaluator, args: []*Expr) EvalError!Expr {
     return Expr{ .string = @tagName(val) };
 }
 fn builtin__dbg_ident(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    const arg_0 = args[0].*;
+    const arg_0 = try state.evalOptions(args[0], .{ .find_idents = false });
     if (arg_0 != .identifier and arg_0 != .builtin_ident) {
         std.log.err("@dbg_ident{{ident}} takes an identifier or a builtin identifier", .{});
         return EvalError.BadFuncCall;
@@ -103,18 +105,19 @@ fn exprLessThan(c: struct { *Evaluator }, a: *Expr, b: *Expr) bool {
 }
 
 fn builtin__as(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    const bad_call_msg = "@as{t, any} takes a type as a string, and a value ";
+    const bad_call_msg = "@as{t, any} takes a string 't' and a value of any type 'any'";
 
     const s = args[0].*; // string
     if (!s.expectType(.string, bad_call_msg)) return EvalError.BadFuncCall;
 
     const e = try state.eval(args[1]);
 
-    const ExprType = .{
-        .Complex = "complex",
-        .Integer = "integer",
-        .Real = "real",
-        .String = "string",
+    const ExprType = struct {
+        pub const Complex = "complex";
+        pub const Integer = "integer";
+        pub const Real = "real";
+        pub const String = "string";
+        pub const Identifier = "ident";
     };
 
     if (std.mem.eql(u8, s.string, ExprType.Complex) and e.isNumber()) { // -> complex
@@ -145,13 +148,15 @@ fn builtin__as(state: *Evaluator, args: []*Expr) EvalError!Expr {
 
         e.printValue(new_config) catch return Expr{ .string = buffer };
         return Expr{ .string = buffer[0..writer.end] };
+    } else if (std.mem.eql(u8, s.string, ExprType.Identifier) and (e == .string or e == .identifier)) {
+        return if (e == .identifier) e else Expr{ .identifier = e.string };
     }
 
     return EvalError.BadOperation;
 }
 
 fn builtin__undef(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    const e = args[0].*;
+    const e = try state.eval(args[0]);
 
     if (!e.expectType(.identifier, "@undef{ident} takes an identifier")) return EvalError.BadFuncCall;
 
@@ -184,9 +189,8 @@ pub fn builtin__help(state: *Evaluator, args: []*Expr) EvalError!Expr {
     if (!arg_0.expectType(.string, "@help{s} takes a string literal")) return EvalError.BadFuncCall;
     if (std.mem.eql(u8, arg_0.string, HelpArgs.Funcs)) {
         state.printFuncsList(w);
-    } else if (std.mem.eql(u8, arg_0.string, HelpArgs.Consts)) {
         state.printConstantsList(w);
-    } else {
+    } else if (std.mem.eql(u8, arg_0.string, HelpArgs.Consts)) {} else {
         std.log.err("Invalid '@help' argument '{s}' (try '@help{{}}' to see legal arguments)", .{arg_0.string});
         return EvalError.BadFuncCall;
     }

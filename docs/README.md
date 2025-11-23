@@ -60,6 +60,8 @@ All expressions (equality or otherwise) found here evaluate to the boolean value
 - `A % B`	= modulo (remainder) operator							(ex. `9 % 5 == 4`)
 - `|A|`		= absolute value operator								(ex. `|5-9| == 4`)
 - `(expr)`	= parentheses are always evaluated first				(ex. `9*(2+3) == 45`)
+- `A = B`   = "assert" that A = B. does assignment (see [Concepts](#concepts)) (ex. `b = true`)
+- `A := B`  = evaluate B and assign to A. distinct from `A = B`.    (ex. `x = false; x := !x`)
 
 Because it would be a massive pain otherwise, you may specify multiple statements/expressions by separating them with a semicolon (`;`).
 
@@ -121,7 +123,7 @@ In the leftmost section of a function's entry in this list, `...` represents the
 - `@dbg_ident{ident}` = prints the Abstract Syntax Tree (AST) construction of the expression associated with the identifier argument `ident`. For example: `x=9; @dbg_ident{x}` would print the same as `@dbg{9}`
 - `@as{type_str, val}` = attempts to cast a value `val` to the type specified by `type_str`: `"string"`, `"real"`, `"complex"`, or `"integer"` (more may be added to this list).
 - `@undef{ident}` = undefines a user-defined variable that was previously defined like `x = 9`. Returns `true` if it succeeded in undefining the variable, `false` if it failed (if the variable was not defined).
-- `@assign{ident, expr}` = evaluate 'expr' and assign the final value to the identifier `ident` (works around the default behavior of associating the expression `expr` with the identifier `ident`, like with `ident = expr`; see [Concepts](#concepts) for more on this).
+- `@assign{ident, expr}` = exact same as `ident := expr` (see [Basic Syntax](#basic-syntax)).
 
 #### Mathematical Functions
 - `root{x, b}` = returns the `b`th root of `x` (either can be real or complex).

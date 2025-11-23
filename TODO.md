@@ -38,10 +38,10 @@
       not in this repo yet)
 - [x] fix bug in ~~[tests/bug3.log](tests/bug3.log)~~ (seems to happen when taking the absolute value of a nested vector)
 - [x] also the annoying bug in [tests/bug4.log](tests/bug4.log). seems like `@dbg_ident` doesn't check that expression passed to it is an identifier
-- [ ] make `@as` able to convert 'string'-type values into 'identifier'-type values, like: `@as{"identifier", "hol" + "a"} == hola`
+- [x] make `@as` able to convert 'string'-type values into 'identifier'-type values, like: `@as{"identifier", "hol" + "a"} == hola`
       (of course the identifier would have to be separately searched and evaluated, since 'identifier'-type values don't make much sense)
-- [ ] `x := y` notation for `@assign{x, y}`. should have exactly the same behavior, so the `@assign` builtin could probably be removed.
-- [ ] add `nothing` constant of type 'nothing'.
+- [x] `x := y` notation for `@assign{x, y}`. should have exactly the same behavior, so the `@assign` builtin could probably be removed.
+- [ ] ~~add `nothing` constant of type 'nothing'.~~ doesn't really make sense, but not fully rejected yet
 
 
 

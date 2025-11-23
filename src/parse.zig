@@ -223,7 +223,7 @@ const ParserState = struct {
                 },
                 else => true,
             };
-            if (@intFromEnum(op_tok.type) > @intFromEnum(TokenType.NotOp)) break;
+            if (!op_tok.type.isOp()) break;
 
             const preced = operator_precedence[@intFromEnum(op_tok.type)];
             if (preced > max_preced) break;
@@ -339,6 +339,6 @@ pub const operator_precedence = [_]u8{
     6, 6, 6, 6, // OpLess, OpGreater, OpLessEq, OpGreaterEq,
     7, 7, // OpEq, OpNotEq,
     7, 7, // OpExactEq, OpExactNotEq,
-    14, // OpAssertEqual,
+    14, 14, // OpEvalAssign, OpAssertEqual,
     2, 2, 2, 2, // OpNot, OpNegate, OpUnaryNothing, OpTilde
 };

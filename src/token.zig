@@ -26,6 +26,7 @@ pub const TokenType = enum(u32) {
     OpExactEq,
     OpExactNotEq,
 
+    OpEvalAssign,
     OpAssertEqual,
 
     OpNot,
@@ -86,6 +87,22 @@ pub const TokenType = enum(u32) {
         return self == .OpPow or self.isUnaryOp();
     }
 
+    /// return whether the token type is an operator that evaluates to true if the operands are 'equal'
+    pub fn isEqOp(self: TokenType) bool {
+        return switch (self) {
+            .OpEq, .OpLessEq, .OpGreaterEq, .OpExactEq => true,
+            else => false,
+        };
+    }
+
+    /// return whether the token type is an operator that evaluates to false if the operands are 'equal'
+    pub fn isNotEqOp(self: TokenType) bool {
+        return switch (self) {
+            .OpNotEq, .OpGreater, .OpLess, .OpExactNotEq => true,
+            else => false,
+        };
+    }
+
     /// return a string-ified version of the token type for user-side output.
     /// return type is ?[]const u8 because it might return null in the future.
     pub fn stringify(self: Self) ?[]const u8 {
@@ -108,6 +125,7 @@ pub const TokenType = enum(u32) {
             .OpNotEq => "'!='",
             .OpExactEq => "'==='",
             .OpExactNotEq => "'!=='",
+            .OpEvalAssign => "':='",
             .OpAssertEqual => "'='",
             .OpNot => "!x",
             .OpNegate => "-x",
@@ -163,6 +181,12 @@ pub const Token = struct {
                 },
             } else .{ .string = string[0..1], .type = toktype_by_char[string[0]] },
 
+            // := evaluated assignment operator
+            ':' => if (string.len > 1 and string[1] == '=') .{
+                .string = string[0..2],
+                .type = .OpEvalAssign,
+            } else .{ .string = &.{}, .type = .Invalid },
+
             // equality operators
             '=', '!' => blk: {
                 if ((string.len > 1 and string[1] != '=') or string.len == 1) {
@@ -197,10 +221,10 @@ pub const Token = struct {
 
                 // consume scientific form section
                 if ((string[end_i] == 'e' or string[end_i] == 'E') and !tic.looking_for_int) {
-                    if (end_i == string.len - 1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
+                    if (end_i == string.len - 1) break :blk .{ .string = &.{}, .type = .Invalid };
                     end_i += 1;
                     if (string[end_i] == '+' or string[end_i] == '-') {
-                        if (end_i == string.len - 1) break :blk .{ .string = &.{}, .type = .InvalidCharacter };
+                        if (end_i == string.len - 1) break :blk .{ .string = &.{}, .type = .Invalid };
                         end_i += 1;
                     }
                     end_i = std.mem.indexOfNonePos(u8, string, end_i + 1, digits ++ "_") orelse
