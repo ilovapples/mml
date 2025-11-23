@@ -8,33 +8,41 @@
 - [x] make evaluation return a smaller set of errors (i should be catching more of them)
 - [x] also functions at some point would be good, but they're not a priority
 - [x] add error message for unrecognized characters in a token (like '&' doesn't print an error message, it just returns a null/invalid token; not sure how that works)
-- [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
+- [ ] improve errors (one or two of these is probably fine)
+    * [ ] return errors (not error unions, but the specific problems) in a way that can be stored in a variable/struct and 'rendered' into a string
+    * [ ] utilize src/error_msgs.zig with StringContext to make error messages a lot more helpful
 - [x] fix the error message in ~~[tests/bug1.log](tests/bug1.log)~~
 - [x] add debug output to indicate when parsing and evaluation are complete and how long it took (with `--debug` flag)
 - [x] @undef(ident) builtin to undefine a user-defined identifier
 - [x] somehow fix print{...} printed stuff showing up to the left of the output bars (maybe remove the bars?)
 - [x] copy contents of strings need into the Expr.string field, instead of just saving their position
-* [x] can merge prompt branch
-    - [x] special codes (new Expr type) stored in constants that can interact with certain parts of the application (such as the prompt) (like `exit` and `clear` and such)
+- [x] can merge prompt branch
+    * [x] special codes (new Expr type) stored in constants that can interact with certain parts of the application (such as the prompt) (like `exit` and `clear` and such)
 - [x] add a (zig) function to assert that an Expr is of a certain type and log an error if not
 - [x] fix the issue in ~~[tests/bug2.log](tests/bug2.log)~~
 - [x] fix out-of-bounds with `@` as the input string.
-* [ ] documentation related features
-    - [x] partially automated generation of a list of all functions that are implemented (with a command-line option to show it)
-    - [x] copy over syntax guide from [maths](https://github.com/ilovapples/maths) because it's basically the same thing, but update with new stuff (and rewrite the first paragraph, it's practically illegible)
-* [ ] other features for prompt/REPL
-    - [ ] autocompletion/suggestions
-    - [ ] history (like up and down arrow on a shell)
+- [ ] documentation related features
+    * [x] partially automated generation of a list of all functions that are implemented (with a command-line option to show it)
+    * [x] copy over syntax guide from [maths](https://github.com/ilovapples/maths) because it's basically the same thing, but update with new stuff (and rewrite the first paragraph, it's practically illegible)
+- [ ] other features for prompt/REPL
+    * [ ] autocompletion/suggestions
+    * [ ] history (like up and down arrow on a shell)
         * [x] up arrow
         * [ ] down arrow
-* [ ] other features (misc.)
-    - [x] some way to put the output of `@dbg{expr}` into a `string` from MML.
-    - [ ] make `{}` a proper operation on `function`-type expressions.
-- [ ] make argument parser read arguments as they're requested. will help it know how to deal with stuff like '-h 9', where '-h' is a bool option and
-      9 shouldn't be considered its value, but is. it's impossible for it to know how to deal with it right now. (partially implemented but not in this repo yet)
+- [ ] other features (misc.)
+    * [x] some way to put the output of `@dbg{expr}` into a `string` from MML.
+    * [ ] make `{}` a proper operation on `function`-type expressions.
+- [ ] make argument parser read arguments as they're requested. will help it know how to deal with
+      stuff like '-h 9', where '-h' is a bool option and 9 shouldn't be considered its value, but
+      is. it's impossible for it to know how to deal with it right now. (partially implemented but
+      not in this repo yet)
 - [x] fix bug in ~~[tests/bug3.log](tests/bug3.log)~~ (seems to happen when taking the absolute value of a nested vector)
 - [x] also the annoying bug in [tests/bug4.log](tests/bug4.log). seems like `@dbg_ident` doesn't check that expression passed to it is an identifier
-    
+- [ ] make `@as` able to convert 'string'-type values into 'identifier'-type values, like: `@as{"identifier", "hol" + "a"} == hola`
+      (of course the identifier would have to be separately searched and evaluated, since 'identifier'-type values don't make much sense)
+- [ ] `x := y` notation for `@assign{x, y}`. should have exactly the same behavior, so the `@assign` builtin could probably be removed.
+- [ ] add `nothing` constant of type 'nothing'.
+
 
 
 # todos from [maths](https://github.com/ilovapples/maths)

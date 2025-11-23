@@ -16,7 +16,7 @@ conf: ?*Config = null,
 variable_map: std.StringHashMap(*Expr),
 locals_map: ?std.StringHashMap(*Expr) = null,
 last_val: ?Expr = null,
-arena_alloc: Allocator,
+allocs: *mml.Allocators,
 
 var n_initialized: std.atomic.Value(u64) = .init(0);
 var constants_map: std.StringHashMap(Expr) = undefined;
@@ -38,22 +38,21 @@ pub const FuncsStruct = struct {
 const Self = @This();
 
 /// Initialize an Evaluator (along with other global state that needs to be initialized).
-/// Uses an ArenaAllocator with child allocator `alloc` under the hood.
-pub fn init(arena: *ArenaAllocator, conf: ?*Config) !Self {
-    const alloc = arena.allocator();
+pub fn init(allocs: *mml.Allocators, conf: ?*Config) !Self {
+    const arena_alloc = allocs.arena.allocator();
     const n_initialized_val = n_initialized.load(.acquire);
     if (n_initialized_val == 0) {
-        constants_map = .init(alloc);
-        multiarg_funcs_map = .init(alloc);
-        builtin_funcs_map = .init(alloc);
+        constants_map = .init(arena_alloc);
+        multiarg_funcs_map = .init(arena_alloc);
+        builtin_funcs_map = .init(arena_alloc);
 
         try initBuiltins();
     }
     n_initialized.store(n_initialized_val + 1, .release);
     return .{
         .conf = conf,
-        .variable_map = .init(alloc),
-        .arena_alloc = alloc,
+        .variable_map = .init(arena_alloc),
+        .allocs = allocs,
     };
 }
 
@@ -86,7 +85,7 @@ pub const EvalError = error{
 fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
     switch (e.*) {
         .invalid => return EvalError.InvalidExpression,
-        .vector, .integer, .real_number, .complex_number, .boolean, .string, .func_object => return e.*,
+        .vector, .integer, .real_number, .complex_number, .boolean, .string, .func_object, .nothing => return e.*,
         .identifier, .builtin_ident => {
             const ident = if (e.* == .identifier) e.identifier else e.builtin_ident;
             if (e.* == .builtin_ident and std.mem.eql(u8, ident, "ans")) {
@@ -119,16 +118,20 @@ fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
     const left = e.operation.left;
     const right = e.operation.right;
 
+    const alloc = state.allocs.arena.allocator();
+
     if (e.operation.op == .OpAssertEqual and left != null and right != null) {
         if (left.?.* == .identifier) {
             if (right.?.dependsOn(state, left.?.identifier)) {
                 std.log.err("circular dependency found in definition of '{s}'", .{left.?.identifier});
                 return EvalError.CircularDefinitionError;
             }
+
             try state.variable_map.put(left.?.identifier, right.?);
             if (state.conf) |c| {
                 if (c.assign_returns_nothing) return Expr.init({});
-            } else return state.evalRecurse(right.?);
+            }
+            return state.evalRecurse(right.?);
         } else if (left.?.* == .operation and left.?.operation.op == .OpFuncCall and
             left.?.operation.left.?.* == .identifier and left.?.operation.right.?.* == .vector)
         {
@@ -137,7 +140,7 @@ fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
                 .body = right.?,
                 .params = blk: {
                     const param_name_vector = left.?.operation.right.?;
-                    var params: [][]const u8 = try state.arena_alloc.alloc([]const u8, param_name_vector.vector.len);
+                    var params: [][]const u8 = try alloc.alloc([]const u8, param_name_vector.vector.len);
                     for (param_name_vector.vector, 0..) |pname, i| {
                         if (pname.* != .identifier) {
                             std.log.err("arguments to function definition must be " ++
@@ -152,7 +155,7 @@ fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
             };
 
             if (is_legal) {
-                const expr_to_save = try state.arena_alloc.create(Expr);
+                const expr_to_save = try state.allocs.expr_pool.create();
                 expr_to_save.* = @unionInit(Expr, "func_object", fo);
 
                 try state.variable_map.put(left.?.operation.left.?.identifier, expr_to_save);
@@ -169,7 +172,11 @@ fn evalRecurse(state: *Self, e: *const Expr) EvalError!Expr {
         return try state.applyFunc(left.?.*, right_val_vec.vector);
     }
 
-    return try state.applyOp(try state.evalRecurse(left.?), if (right) |r| try state.evalRecurse(r) else null, e.operation.op); // todo
+    return try state.applyOp(
+        try state.evalRecurse(left.?),
+        if (right) |r| try state.evalRecurse(r) else null,
+        e.operation.op,
+    );
 }
 
 pub fn eval(state: *Self, e: *const Expr) !Expr {
@@ -178,6 +185,8 @@ pub fn eval(state: *Self, e: *const Expr) !Expr {
 }
 
 fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
+    const alloc = state.allocs.arena.allocator();
+
     if (func_ident == .identifier) blk: {
         const fo_expr = state.variable_map.get(func_ident.identifier) orelse break :blk;
         if (fo_expr.* != .func_object) {
@@ -187,7 +196,7 @@ fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
         const fo = fo_expr.func_object;
 
         if (state.locals_map) |*lm| lm.deinit();
-        state.locals_map = .init(state.arena_alloc);
+        state.locals_map = .init(alloc);
 
         if (args.len != fo.params.len) {
             std.log.err("expected {d} argument(s), got {d}; in call to user-defined function '{s}'", .{ fo.params.len, args.len, func_ident.identifier });
@@ -238,6 +247,8 @@ fn applyFunc(state: *Self, func_ident: Expr, args: []*Expr) EvalError!Expr {
 const epsilon = 1e-14;
 
 pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalError!Expr {
+    const alloc = state.allocs.arena.allocator();
+
     if (lo == null) return EvalError.InvalidExpression;
     const left = lo.?;
 
@@ -281,10 +292,10 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
             },
             .OpTilde => { // plus-minus operator
                 var vec_expr: Expr = .{
-                    .vector = try state.arena_alloc.alloc(*Expr, 2),
+                    .vector = try alloc.alloc(*Expr, 2),
                 };
 
-                const two_exprs = try state.arena_alloc.alloc(Expr, 2);
+                const two_exprs = try alloc.alloc(Expr, 2);
                 const negated = try state.applyOp(lo, null, .OpNegate);
                 two_exprs[0] = left;
                 two_exprs[1] = negated;
@@ -363,7 +374,7 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
     } else if (left == .string and right == .string) {
         return switch (op) {
             .OpAdd => blk: {
-                const str = try state.arena_alloc.alloc(u8, left.string.len + right.string.len);
+                const str = try alloc.alloc(u8, left.string.len + right.string.len);
                 @memcpy(str[0..left.string.len], left.string);
                 @memcpy(str[left.string.len..(left.string.len + right.string.len)], right.string);
                 break :blk Expr{ .string = str };
@@ -382,7 +393,7 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
             .{ left.string, @intFromFloat(@trunc(right.real_number)) }
         else
             .{ right.string, @intFromFloat(@trunc(left.real_number)) };
-        const str = try state.arena_alloc.alloc(u8, the_str.len * the_multiple);
+        const str = try alloc.alloc(u8, the_str.len * the_multiple);
         for (0..the_multiple) |i| {
             @memcpy(str[i * the_str.len .. (i + 1) * the_str.len], the_str);
         }
@@ -435,9 +446,9 @@ pub fn applyOp(state: *Self, lo: ?Expr, ro: ?Expr, op: token.TokenType) EvalErro
             .OpAdd, .OpSub, .OpMul, .OpDiv => {
                 const source_vec = if (left == .vector) &left.vector else &right.vector;
                 var vec_expr: Expr = .{
-                    .vector = try state.arena_alloc.alloc(*Expr, source_vec.len),
+                    .vector = try alloc.alloc(*Expr, source_vec.len),
                 };
-                const n_exprs = try state.arena_alloc.alloc(Expr, source_vec.len);
+                const n_exprs = try alloc.alloc(Expr, source_vec.len);
                 for (0..source_vec.len) |i| {
                     const cur = if (left == .vector) try state.applyOp(try state.eval(left.vector[i]), right, op) else try state.applyOp(left, try state.eval(right.vector[i]), op);
                     n_exprs[i] = cur;

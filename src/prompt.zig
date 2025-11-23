@@ -30,7 +30,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
         return 1;
     }
     const eval = conf.evaluator.?;
-    const alloc = eval.arena_alloc;
+    const alloc = eval.allocs.arena.allocator();
 
     try tty_writer.writeAll(
         \\MML Interactive Prompt 0.1.0 (zig ver.)
@@ -65,7 +65,7 @@ pub fn runPrompt(tty_reader: *std.fs.File.Reader, conf: *Config, original_term: 
             defer eval_finished.store(true, AtomicOrder.release);
 
             // parse line into expressions
-            const exprs = parse.parseStatements(@ptrCast(@alignCast(eval.arena_alloc.ptr)), line_buffer[0..line_len.?]) catch {
+            const exprs = parse.parseStatements(eval.allocs, line_buffer[0..line_len.?]) catch {
                 eval_finished.store(true, AtomicOrder.release);
                 break :blk Expr{ .invalid = {} };
             };

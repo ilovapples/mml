@@ -33,13 +33,9 @@ pub fn main() !void {
         .flags = 0,
     }, null);
 
-    // arena & allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
 
     // argument parsing
     const args = try std.process.argsAlloc(allocator);
@@ -63,14 +59,33 @@ pub fn main() !void {
     // config
     var conf: Config = .{
         .writer = stdout_w,
+        .debug_output = pa.longShortOption(
+            bool,
+            "debug",
+            'd',
+            "enable debug output across the program",
+        ) orelse false,
+        .bools_print_as_nums = pa.option(
+            bool,
+            "bools-are-nums",
+            "if set, Booleans print as 1 or 0 instead of as true or false",
+        ) orelse false,
+        .decimal_precision = pa.option(
+            u32,
+            "precision",
+            "(WARNING: unused) precision to use when displaying decimals",
+        ) orelse 6,
+        .quote_strings = pa.option(
+            bool,
+            "quote-strings",
+            "if set, strings print surrounded by double quotes",
+        ) orelse false,
+        .assign_returns_nothing = pa.option(
+            bool,
+            "assign-returns-nothing",
+            "if set, assignment with '=' does not automatically evaluate the right side",
+        ) orelse false,
     };
-
-    conf.debug_output = pa.longShortOption(bool, "debug", 'd', "enable debug output across the program") orelse false;
-
-    conf.bools_print_as_nums = pa.option(bool, "bools-are-nums", "if set, Booleans print as 1 or 0 instead of as true or false") orelse false;
-    conf.decimal_precision = pa.option(u32, "precision", "(WARNING: unused) precision to use when displaying decimals") orelse 6;
-    conf.quote_strings = pa.option(bool, "quote-strings", "if set, strings print surrounded by double quotes") orelse false;
-    conf.assign_returns_nothing = pa.option(bool, "assign-returns-nothing", "if set, assignment with '=' does not automatically evaluate the right side") orelse false;
 
     const mml_consts_opt = pa.option(bool, "mml-consts", "display list of provided constants in MML") orelse false;
     const mml_funcs_opt = pa.option(bool, "mml-funcs", "display list of provided functions in MML") orelse false;
@@ -89,8 +104,11 @@ pub fn main() !void {
         std.process.exit(1);
     }
 
+    var allocs: mml.Allocators = .init(allocator);
+    defer allocs.deinit();
+
     // evaluator
-    var eval = try Evaluator.init(&arena, &conf);
+    var eval = try Evaluator.init(&allocs, &conf);
     defer eval.deinit();
 
     conf.evaluator = &eval;
@@ -118,7 +136,7 @@ pub fn main() !void {
     }
 
     // parsing & evaluating
-    const exprs = parse.parseStatements(&arena, expr_str.?) catch {
+    const exprs = parse.parseStatements(&allocs, expr_str.?) catch {
         std.log.err("failed to parse expressions from source: '{s}'\n", .{expr_str.?});
         return;
     };

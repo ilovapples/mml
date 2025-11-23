@@ -36,7 +36,7 @@ pub fn build(b: *Build) void {
     //});
 
     // MML EXECUTABLE
-    const main = b.addExecutable(.{
+    const exe = b.addExecutable(.{
         .name = out_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
@@ -47,13 +47,13 @@ pub fn build(b: *Build) void {
     });
 
     //main.linkLibrary(libmml);
-    main.root_module.addImport(arg_pkg_name, arg_pkg);
+    exe.root_module.addImport(arg_pkg_name, arg_pkg);
     const mibu_dep = b.dependency("mibu", .{});
-    main.root_module.addImport("mibu", mibu_dep.module("mibu"));
-    main.root_module.addImport("mml", libmml_mod);
-    b.installArtifact(main);
+    exe.root_module.addImport("mibu", mibu_dep.module("mibu"));
+    exe.root_module.addImport("mml", libmml_mod);
+    b.installArtifact(exe);
 
-    const run_main = b.addRunArtifact(main);
+    const run_main = b.addRunArtifact(exe);
 
     const run_step = b.step("run", "run executable after building");
     run_step.dependOn(&run_main.step);

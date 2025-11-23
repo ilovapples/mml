@@ -3,10 +3,11 @@ const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 const expect = std.testing.expect;
 
-const token = @import("token.zig");
+const mml = @import("root.zig");
+const token = mml.token;
 const Token = token.Token;
 const TokenType = token.TokenType;
-const expr = @import("expr.zig");
+const expr = mml.expr;
 const Expr = expr.Expr;
 
 const ParserState = struct {
@@ -16,16 +17,9 @@ const ParserState = struct {
     peeked_token: ?Token = null,
     looking_for_int: bool = false,
     in_pipe_block: bool = false,
-    arena: *ArenaAllocator,
+    allocs: *mml.Allocators,
 
     const Self = @This();
-
-    pub fn init(arena: *ArenaAllocator, string: []const u8) Self {
-        return .{
-            .string = string,
-            .arena = arena,
-        };
-    }
 
     pub fn peekToken(self: *Self) Token {
         // skip whitespace
@@ -51,11 +45,12 @@ const ParserState = struct {
         UnterminatedVectorLiteral,
     } || Allocator.Error;
     pub fn parseExprRecurse(self: *Self, max_preced: u8) ParseError!*Expr {
-        const alloc = self.arena.allocator();
+        const expr_pool = &self.allocs.expr_pool;
+        const alloc = self.allocs.arena.allocator();
 
         var tok = self.nextToken();
-        var left = try alloc.create(Expr);
-        errdefer alloc.destroy(left);
+        var left = try expr_pool.create();
+        errdefer expr_pool.destroy(left);
 
         if (tok.type == .OpSub or tok.type == .OpAdd or tok.type.isUnaryOp()) {
             const new_token_type = switch (tok.type) {
@@ -72,7 +67,7 @@ const ParserState = struct {
             });
         } else if (tok.type == .Ident or tok.type == .BuiltinIdent) {
             if (self.peekToken().type == .OpenBrace) { // function call
-                const name_expr = try alloc.create(Expr);
+                const name_expr = try expr_pool.create();
                 if (tok.type == .Ident) {
                     name_expr.* = @unionInit(Expr, "identifier", try alloc.dupe(u8, tok.string));
                 } else {
@@ -87,8 +82,8 @@ const ParserState = struct {
 
                 _ = self.nextToken();
 
-                left.operation.right = try alloc.create(Expr);
-                var temp_arrlist = try std.ArrayList(*Expr).initCapacity(alloc, 1);
+                left.operation.right = try expr_pool.create();
+                var temp_arrlist = std.ArrayList(*Expr).empty;
 
                 while (true) {
                     if (self.peekToken().type == .CloseBrace) {
@@ -121,7 +116,7 @@ const ParserState = struct {
                 _ = self.nextToken();
             }
         } else if (tok.type == .OpenBracket) { // vector literal
-            var temp_arrlist = try std.ArrayList(*Expr).initCapacity(alloc, 2);
+            var temp_arrlist = std.ArrayList(*Expr).empty;
             errdefer temp_arrlist.deinit(alloc);
             if (self.peekToken().type == .CloseBracket) {
                 left.* = @unionInit(Expr, "vector", &[_]*Expr{});
@@ -161,7 +156,7 @@ const ParserState = struct {
 
             self.in_pipe_block = false;
 
-            const opnode = try alloc.create(Expr);
+            const opnode = try expr_pool.create();
             opnode.* = @unionInit(Expr, "operation", .{
                 .op = .Pipe,
                 .left = left,
@@ -171,29 +166,45 @@ const ParserState = struct {
             left = opnode;
         } else if (tok.type == .Number) {
             if (self.looking_for_int) {
-                left.* = @unionInit(Expr, "integer", std.fmt.parseInt(i64, tok.string, 10) catch |e| blk: switch (e) {
-                    std.fmt.ParseIntError.Overflow => {
-                        std.log.warn("integer read as '{s}' has a magnitude " ++ "larger than about 9.2 quintillion (2^63). " ++ "assuming infinity.", .{tok.string});
-                        break :blk std.math.maxInt(i64);
+                left.* = @unionInit(
+                    Expr,
+                    "integer",
+                    std.fmt.parseInt(i64, tok.string, 10) catch |e| blk: switch (e) {
+                        std.fmt.ParseIntError.Overflow => {
+                            std.log.warn("integer read as '{s}' has a magnitude " ++ "larger than about 9.2 quintillion (2^63). " ++ "assuming infinity.", .{tok.string});
+                            break :blk std.math.maxInt(i64);
+                        },
+                        std.fmt.ParseIntError.InvalidCharacter => {
+                            // if this is reached, it means either std.fmt and I disagree on what counts as an integer, or I did my checking wrong
+                            @branchHint(.cold);
+                            std.log.warn("failed to read '{s}' as an integer. " ++ "assuming 0.", .{tok.string});
+                            break :blk 0;
+                        },
                     },
-                    std.fmt.ParseIntError.InvalidCharacter => {
-                        // if this is reached, it means either std.fmt and I disagree on what counts as an integer, or I did my checking wrong
-                        @branchHint(.cold);
-                        std.log.warn("failed to read '{s}' as an integer. " ++ "assuming 0.", .{tok.string});
-                        break :blk 0;
-                    },
-                });
+                );
             } else {
-                left.* = @unionInit(Expr, "real_number", std.fmt.parseFloat(f64, tok.string) catch blk: {
-                    // if this is reached, it means either std.fmt and I disagree on what counts as a number, or I did my checking wrong
-                    @branchHint(.cold);
-                    std.log.warn("failed to read '{s}' as a real number. " ++ "assuming NaN (not a number).", .{tok.string});
-                    break :blk std.math.nan(f64);
-                });
+                left.* = @unionInit(
+                    Expr,
+                    "real_number",
+                    std.fmt.parseFloat(f64, tok.string) catch blk: {
+                        // if this is reached, it means either std.fmt and I disagree
+                        // on what counts as a number, or I did my checking wrong
+                        @branchHint(.cold);
+                        std.log.warn(
+                            "failed to read '{s}' as a real number. " ++ "assuming NaN (not a number).",
+                            .{tok.string},
+                        );
+                        break :blk std.math.nan(f64);
+                    },
+                );
             }
             self.looking_for_int = false;
         } else if (tok.type == .String) {
-            left.* = @unionInit(Expr, "string", try alloc.dupe(u8, tok.string[1 .. tok.string.len - 1]));
+            left.* = @unionInit(
+                Expr,
+                "string",
+                try alloc.dupe(u8, tok.string[1 .. tok.string.len - 1]),
+            );
         } else {
             std.log.err("null expression. found token .{t} ({s})", .{ tok.type, tok.type.stringify().? });
             return ParseError.NullExpr;
@@ -226,7 +237,7 @@ const ParserState = struct {
                 return ParseError.ExpectedExpr;
             };
 
-            const opnode = try alloc.create(Expr);
+            const opnode = try expr_pool.create();
             opnode.* = @unionInit(Expr, "operation", .{
                 .op = op_tok.type,
                 .left = left,
@@ -239,22 +250,22 @@ const ParserState = struct {
         return left;
     }
 };
-pub fn parseExpr(arena: *ArenaAllocator, str: []const u8) !*Expr {
-    var state = ParserState.init(arena, str);
+pub fn parseExpr(allocs: *mml.Allocators, str: []const u8) !*Expr {
+    var state: ParserState = .{ .allocs = allocs, .string = str };
 
     return try state.parseExprRecurse(parser_max_preced);
 }
 
-pub fn parseStatements(arena: *ArenaAllocator, str: []const u8) ![]*Expr {
-    const alloc = arena.allocator();
+pub fn parseStatements(allocs: *mml.Allocators, str: []const u8) ![]*Expr {
+    const alloc = allocs.arena.allocator();
 
-    var temp = try std.ArrayList(*Expr).initCapacity(alloc, 1);
+    var temp = std.ArrayList(*Expr).empty;
     errdefer temp.deinit(alloc);
 
-    var state = ParserState.init(arena, str);
-    try temp.append(alloc, try state.parseExprRecurse(parser_max_preced));
-    while (state.nextToken().type == .Semicolon) {
+    var state: ParserState = .{ .allocs = allocs, .string = str };
+    while (true) {
         try temp.append(alloc, try state.parseExprRecurse(parser_max_preced));
+        if (state.nextToken().type != .Semicolon) break;
     }
 
     return try temp.toOwnedSlice(alloc);

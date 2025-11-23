@@ -33,7 +33,13 @@ fn builtin__dbg(state: *Evaluator, args: []*Expr) EvalError!Expr {
     return Expr.init({});
 }
 fn builtin__dbg_str(state: *Evaluator, args: []*Expr) EvalError!Expr {
-    return Expr{ .string = try std.fmt.allocPrint(state.arena_alloc, "{f}", .{std.fmt.alt(args[0].*, .printFmt)}) };
+    return Expr{
+        .string = try std.fmt.allocPrint(
+            state.allocs.arena.allocator(),
+            "{f}",
+            .{std.fmt.alt(args[0].*, .printFmt)},
+        ),
+    };
 }
 fn builtin__typeof(state: *Evaluator, args: []*Expr) EvalError!Expr {
     const val = try state.eval(args[0]);
@@ -83,9 +89,9 @@ fn sort(state: *Evaluator, args: []*Expr) EvalError!Expr {
         return EvalError.BadFuncCall;
     }
 
-    const sorted_vec = Expr{ .vector = try state.arena_alloc.dupe(*Expr, vec.vector) };
+    const sorted_vec = Expr{ .vector = try state.allocs.arena.allocator().dupe(*Expr, vec.vector) };
 
-    std.sort.heap(*Expr, sorted_vec.vector, .{state}, exprLessThan);
+    std.sort.pdq(*Expr, sorted_vec.vector, .{state}, exprLessThan);
 
     return sorted_vec;
 }
@@ -132,7 +138,7 @@ fn builtin__as(state: *Evaluator, args: []*Expr) EvalError!Expr {
             },
         };
     } else if (std.mem.eql(u8, s.string, ExprType.String)) { // -> string
-        const buffer = try state.arena_alloc.alloc(u8, 512);
+        const buffer = try state.allocs.arena.allocator().alloc(u8, 512);
         var writer = std.Io.Writer.fixed(buffer);
         var new_config = state.conf.?.*;
         new_config.writer = &writer;
@@ -194,7 +200,7 @@ fn builtin__assign(state: *Evaluator, args: []*Expr) EvalError!Expr {
         return EvalError.BadFuncCall;
     }
 
-    const new_expr = try state.arena_alloc.create(Expr);
+    const new_expr = try state.allocs.expr_pool.create();
     new_expr.* = try state.eval(args[1]);
     try state.variable_map.put(arg_0.identifier, new_expr);
 
