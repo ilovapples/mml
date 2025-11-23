@@ -525,15 +525,15 @@ test "Evaluator.dropComplexIfZeroImag" {
 test "Evaluator.eval" {
     const Evaluator = Self;
 
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+    var allocs: mml.Allocators = .init(std.testing.allocator);
+    defer allocs.deinit();
 
     var buffer: [512]u8 = undefined;
     var stderr_writer = std.fs.File.stderr().writer(&buffer);
     const stderr = &stderr_writer.interface;
 
     var config: Config = .{ .writer = stderr };
-    var evaluator: Evaluator = try .init(&arena, &config);
+    var evaluator: Evaluator = try .init(&allocs, &config);
     defer evaluator.deinit();
 }
 

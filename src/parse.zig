@@ -272,19 +272,19 @@ pub fn parseStatements(allocs: *mml.Allocators, str: []const u8) ![]*Expr {
 }
 
 test "parser.ParserState.peekToken" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+    var allocs: mml.Allocators = .init(std.testing.allocator);
+    defer allocs.deinit();
 
-    var state: ParserState = .init(&arena, "hello * 9.2");
+    var state: ParserState = .{ .allocs = &allocs, .string = "hello * 9.2" };
     const peeked = state.peekToken();
     try expect(peeked.type == .Ident and std.mem.eql(u8, peeked.string, "hello"));
 }
 
 test "parser.ParserState.nextToken" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+    var allocs: mml.Allocators = .init(std.testing.allocator);
+    defer allocs.deinit();
 
-    var state: ParserState = .init(&arena, "print{cos{31.9} * pi^7}");
+    var state: ParserState = .{ .allocs = &allocs, .string = "print{cos{31.9} * pi^7}" };
 
     const expected = [_]Token{
         .{ .string = "print", .type = .Ident },
@@ -313,14 +313,14 @@ test "parser.ParserState.nextToken" {
 }
 
 test "parser.parseExpr" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+    var allocs: mml.Allocators = .init(std.testing.allocator);
+    defer allocs.deinit();
 
     var buffer: [512]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&buffer);
     const stdout = &stdout_writer.interface;
 
-    const e = try parseExpr(&arena, "x = x / 9.9");
+    const e = try parseExpr(&allocs, "x = x / 9.9");
     _ = e;
     _ = stdout;
     //try e.print(.{.writer = stdout});
